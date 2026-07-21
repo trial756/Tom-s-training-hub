@@ -1,0 +1,10 @@
+{
+  "name": "Tom's Training Hub",
+  "short_name": "Training Hub",
+  "description": "AI-powered training, running, and fueling log for marathon prep.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait"
+}
