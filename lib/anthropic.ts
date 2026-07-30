@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { formatDuration, formatPace } from "@/lib/format";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -118,65 +119,87 @@ export async function parseWorkoutEntry(text: string): Promise<ParsedWorkout> {
 }
 
 // ── Runs ────────────────────────────────────────────────────────────────
+// Runs are logged through a structured form (run type + explicit fields), not
+// free text, so there's nothing to extract — Claude's only job here is to
+// generate coaching feedback (and, optionally, estimate calories when the
+// athlete didn't provide any) grounded in the exact numbers submitted.
 
-export interface ParsedRun {
+export interface StructuredRunInput {
+  run_type: string;
   distance_miles: number | null;
   duration_seconds: number | null;
   pace_seconds_per_mile: number | null;
   avg_hr: number | null;
   max_hr: number | null;
-  run_type: string;
-  notes: string;
-  coaching_feedback: string;
+  cadence_spm: number | null;
+  elev_gain_ft: number | null;
+  elev_loss_ft: number | null;
+  calories: number | null;
+  temp_f: number | null;
+  humidity_pct: number | null;
+  surface: string | null;
+  notes: string | null;
 }
 
-const runSchema = {
+export interface RunCoachingResult {
+  coaching_feedback: string;
+  calories: number | null;
+}
+
+const runCoachingSchema = {
   type: "object",
   properties: {
-    distance_miles: { type: ["number", "null"] },
-    duration_seconds: { type: ["integer", "null"], description: "Total run duration in seconds." },
-    pace_seconds_per_mile: {
-      type: ["integer", "null"],
-      description: "Average pace in seconds per mile. Compute from distance/duration if both are known and pace isn't stated directly.",
-    },
-    avg_hr: { type: ["integer", "null"] },
-    max_hr: { type: ["integer", "null"] },
-    run_type: {
-      type: "string",
-      enum: ["easy", "tempo", "long", "interval", "race", "recovery", "other"],
-    },
-    notes: { type: "string", description: "Route, weather, how it felt, anything noteworthy." },
     coaching_feedback: {
       type: "string",
       description:
-        "2-4 sentences of specific, encouraging coaching feedback on this run relative to marathon training: pace discipline, effort, recovery, and one concrete suggestion.",
+        "2-4 sentences of specific, encouraging coaching feedback on this run relative to marathon training " +
+        "(goal: 3:30 marathon, ~8:01/mi race pace). Reference the specific numbers given — pace discipline, " +
+        "effort relative to conditions/terrain/elevation, and one concrete suggestion for next time.",
+    },
+    estimated_calories: {
+      type: ["integer", "null"],
+      description:
+        "Only populate if the athlete did not already provide a calorie count — estimate from distance, pace, " +
+        "and typical running energy expenditure. If a calorie count was already provided, return null here.",
     },
   },
-  required: [
-    "distance_miles",
-    "duration_seconds",
-    "pace_seconds_per_mile",
-    "avg_hr",
-    "max_hr",
-    "run_type",
-    "notes",
-    "coaching_feedback",
-  ],
+  required: ["coaching_feedback", "estimated_calories"],
   additionalProperties: false,
 };
 
-export async function parseRunEntry(text: string): Promise<ParsedRun> {
-  return parseWithTool<ParsedRun>({
+function describeRun(run: StructuredRunInput): string {
+  const parts: string[] = [`Run type: ${run.run_type}`];
+  if (run.distance_miles != null) parts.push(`Distance: ${run.distance_miles} mi`);
+  if (run.duration_seconds != null) parts.push(`Duration: ${formatDuration(run.duration_seconds)}`);
+  if (run.pace_seconds_per_mile != null) parts.push(`Avg pace: ${formatPace(run.pace_seconds_per_mile)}`);
+  if (run.avg_hr != null) parts.push(`Avg HR: ${run.avg_hr} bpm`);
+  if (run.max_hr != null) parts.push(`Max HR: ${run.max_hr} bpm`);
+  if (run.cadence_spm != null) parts.push(`Cadence: ${run.cadence_spm} spm`);
+  if (run.elev_gain_ft != null) parts.push(`Elevation gain: ${run.elev_gain_ft} ft`);
+  if (run.elev_loss_ft != null) parts.push(`Elevation loss: ${run.elev_loss_ft} ft`);
+  if (run.calories != null) parts.push(`Calories: ${run.calories}`);
+  if (run.temp_f != null) parts.push(`Temp: ${run.temp_f}°F`);
+  if (run.humidity_pct != null) parts.push(`Humidity: ${run.humidity_pct}%`);
+  if (run.surface) parts.push(`Surface: ${run.surface}`);
+  if (run.notes) parts.push(`Notes: ${run.notes}`);
+  return parts.join("\n");
+}
+
+export async function generateRunCoaching(run: StructuredRunInput): Promise<RunCoachingResult> {
+  const result = await parseWithTool<{ coaching_feedback: string; estimated_calories: number | null }>({
     system:
-      "You are a marathon running coach parsing a natural-language run log into structured data. " +
-      "Extract distance, duration, pace, and heart rate. Compute pace from distance and duration when it isn't stated " +
-      "directly. Classify the run type. If a value isn't mentioned or inferable, use null. Then give brief, specific " +
-      "coaching feedback in the context of marathon training (goal: 3:30 marathon, ~8:01/mi race pace).",
-    userText: text,
-    toolName: "record_run",
-    toolDescription: "Records a structured, parsed run with coaching feedback.",
-    inputSchema: runSchema,
+      "You are a marathon running coach. The athlete logged a run using precise structured fields from their " +
+      "watch/app — everything below is already extracted, there is nothing left to parse. Give brief, specific " +
+      "coaching feedback grounded in the exact numbers provided.",
+    userText: describeRun(run),
+    toolName: "record_run_coaching",
+    toolDescription: "Records coaching feedback (and an optional calorie estimate) for an already-structured run.",
+    inputSchema: runCoachingSchema,
   });
+  return {
+    coaching_feedback: result.coaching_feedback,
+    calories: run.calories ?? result.estimated_calories ?? null,
+  };
 }
 
 // ── Meals ───────────────────────────────────────────────────────────────

@@ -20,6 +20,9 @@ export interface Workout {
   coaching_feedback: string | null;
 }
 
+export const RUN_TYPES = ["Easy", "Long", "Tempo", "Marathon Pace", "Interval", "Race", "Other"] as const;
+export type RunType = (typeof RUN_TYPES)[number];
+
 export interface Run {
   id: string;
   created_at: string;
@@ -30,6 +33,13 @@ export interface Run {
   pace_seconds_per_mile: number | null;
   avg_hr: number | null;
   max_hr: number | null;
+  cadence_spm: number | null;
+  elev_gain_ft: number | null;
+  elev_loss_ft: number | null;
+  calories: number | null;
+  temp_f: number | null;
+  humidity_pct: number | null;
+  surface: string | null;
   run_type: string | null;
   notes: string | null;
   coaching_feedback: string | null;

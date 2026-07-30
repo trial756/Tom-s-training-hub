@@ -28,10 +28,26 @@ create table if not exists runs (
   pace_seconds_per_mile integer,
   avg_hr integer,
   max_hr integer,
-  run_type text, -- easy | tempo | long | interval | race | recovery | other
+  cadence_spm integer,
+  elev_gain_ft integer,
+  elev_loss_ft integer,
+  calories integer,
+  temp_f integer,
+  humidity_pct integer,
+  surface text, -- road | trail | track | treadmill | other
+  run_type text, -- Easy | Long | Tempo | Marathon Pace | Interval | Race | Other
   notes text,
   coaching_feedback text
 );
+
+-- Idempotent — safe to re-run against a database created before these columns existed.
+alter table runs add column if not exists cadence_spm integer;
+alter table runs add column if not exists elev_gain_ft integer;
+alter table runs add column if not exists elev_loss_ft integer;
+alter table runs add column if not exists calories integer;
+alter table runs add column if not exists temp_f integer;
+alter table runs add column if not exists humidity_pct integer;
+alter table runs add column if not exists surface text;
 
 create index if not exists runs_logged_at_idx on runs (logged_at desc);
 
