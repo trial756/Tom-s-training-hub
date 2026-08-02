@@ -148,7 +148,7 @@ export default function FuelPage() {
                 <p className="text-[10px] text-gray-500">fat</p>
               </div>
             </div>
-            <CoachingNote text={lastSaved.coaching_feedback} />
+            <CoachingNote feedback={lastSaved.coaching_feedback} />
           </div>
         </div>
       )}

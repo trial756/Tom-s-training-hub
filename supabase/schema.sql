@@ -12,8 +12,14 @@ create table if not exists workouts (
   exercises jsonb not null default '[]'::jsonb, -- [{name, sets:[{reps, weight, weight_unit}]}]
   duration_minutes integer,
   notes text,
-  coaching_feedback text
+  coaching_feedback text, -- "Coach Feedback" section
+  vs_last_time text, -- "Vs Last Time" section — comparison to the most recent similar workout, null if none found
+  adjustments jsonb not null default '[]'::jsonb -- "Adjustments" section — [string]
 );
+
+-- Idempotent — safe to re-run against a database created before these columns existed.
+alter table workouts add column if not exists vs_last_time text;
+alter table workouts add column if not exists adjustments jsonb not null default '[]'::jsonb;
 
 create index if not exists workouts_logged_at_idx on workouts (logged_at desc);
 
@@ -37,7 +43,9 @@ create table if not exists runs (
   surface text, -- road | trail | track | treadmill | other
   run_type text, -- Easy | Long | Tempo | Marathon Pace | Interval | Race | Other
   notes text,
-  coaching_feedback text
+  coaching_feedback text, -- "Coach Feedback" section
+  vs_last_time text, -- "Vs Last Time" section — comparison to the most recent run of the same type, null if none found
+  adjustments jsonb not null default '[]'::jsonb -- "Adjustments" section — [string]
 );
 
 -- Idempotent — safe to re-run against a database created before these columns existed.
@@ -48,6 +56,8 @@ alter table runs add column if not exists calories integer;
 alter table runs add column if not exists temp_f integer;
 alter table runs add column if not exists humidity_pct integer;
 alter table runs add column if not exists surface text;
+alter table runs add column if not exists vs_last_time text;
+alter table runs add column if not exists adjustments jsonb not null default '[]'::jsonb;
 
 create index if not exists runs_logged_at_idx on runs (logged_at desc);
 

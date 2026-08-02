@@ -63,7 +63,27 @@ export interface ParsedWorkout {
   duration_minutes: number | null;
   notes: string;
   coaching_feedback: string;
+  vs_last_time: string | null;
+  adjustments: string[];
 }
+
+// Shared by the workout and run coaching schemas — the "Vs Last Time" and
+// "Adjustments" sections of the 3-part coaching format.
+const vsLastTimeProperty = {
+  type: ["string", "null"],
+  description:
+    "A comparison to the most relevant prior entry from the history provided, citing specific numbers from both " +
+    "(e.g. weight/reps, or pace/distance) and a concrete conclusion — improved, consistent, or regressed, and why. " +
+    "Null if nothing comparable exists in the provided history (e.g. this is the first entry of its kind).",
+};
+
+const adjustmentsProperty = {
+  type: "array",
+  items: { type: "string" },
+  description:
+    "2-4 concrete, specific, actionable suggestions for next time — target weights/reps/pace, rest periods, " +
+    "substitutions. Each one a single self-contained sentence. Empty array if there's nothing specific to adjust.",
+};
 
 const workoutSchema = {
   type: "object",
@@ -98,22 +118,31 @@ const workoutSchema = {
     coaching_feedback: {
       type: "string",
       description:
-        "2-4 sentences of specific, encouraging coaching feedback on this workout: volume, intensity, balance, and one concrete suggestion for next time.",
+        "2-4 sentences of specific, encouraging coaching feedback on THIS workout in isolation: volume, intensity, " +
+        "technique/weight-progression signals, and one concrete observation. Do not compare to prior workouts here " +
+        "— that belongs in vs_last_time.",
     },
+    vs_last_time: vsLastTimeProperty,
+    adjustments: adjustmentsProperty,
   },
-  required: ["exercises", "duration_minutes", "notes", "coaching_feedback"],
+  required: ["exercises", "duration_minutes", "notes", "coaching_feedback", "vs_last_time", "adjustments"],
   additionalProperties: false,
 };
 
-export async function parseWorkoutEntry(text: string): Promise<ParsedWorkout> {
+export async function parseWorkoutEntry(text: string, historyContext: string): Promise<ParsedWorkout> {
   return parseWithTool<ParsedWorkout>({
     system:
       "You are a strength-training coach parsing a natural-language workout log into structured data. " +
       "Extract every exercise, set, rep count, and weight mentioned. If units are ambiguous, assume lb. " +
-      "If a value isn't mentioned, use null rather than guessing. Then give brief, specific coaching feedback.",
-    userText: text,
+      "If a value isn't mentioned, use null rather than guessing. Then give brief, specific coaching feedback. " +
+      "You'll also be given a list of the athlete's recent past workouts (most recent first) — use it to find the " +
+      "most relevant prior workout (one that shares at least one exercise) and write a 'vs last time' comparison " +
+      "grounded in specific numbers from both, plus concrete adjustments for next time.",
+    userText:
+      `New workout entry to parse:\n"${text}"\n\n` +
+      `Recent workout history for comparison (most recent first):\n${historyContext || "No prior workouts logged yet."}`,
     toolName: "record_workout",
-    toolDescription: "Records a structured, parsed weightlifting/strength workout with coaching feedback.",
+    toolDescription: "Records a structured, parsed weightlifting/strength workout with 3-part coaching feedback.",
     inputSchema: workoutSchema,
   });
 }
@@ -144,6 +173,8 @@ export interface StructuredRunInput {
 export interface RunCoachingResult {
   coaching_feedback: string;
   calories: number | null;
+  vs_last_time: string | null;
+  adjustments: string[];
 }
 
 const runCoachingSchema = {
@@ -152,9 +183,9 @@ const runCoachingSchema = {
     coaching_feedback: {
       type: "string",
       description:
-        "2-4 sentences of specific, encouraging coaching feedback on this run relative to marathon training " +
-        "(goal: 3:30 marathon, ~8:01/mi race pace). Reference the specific numbers given — pace discipline, " +
-        "effort relative to conditions/terrain/elevation, and one concrete suggestion for next time.",
+        "2-4 sentences of specific, encouraging coaching feedback on THIS run in isolation, relative to marathon " +
+        "training (goal: 3:30 marathon, ~8:01/mi race pace) — pace discipline and effort relative to " +
+        "conditions/terrain/elevation. Do not compare to prior runs here — that belongs in vs_last_time.",
     },
     estimated_calories: {
       type: ["integer", "null"],
@@ -162,8 +193,10 @@ const runCoachingSchema = {
         "Only populate if the athlete did not already provide a calorie count — estimate from distance, pace, " +
         "and typical running energy expenditure. If a calorie count was already provided, return null here.",
     },
+    vs_last_time: vsLastTimeProperty,
+    adjustments: adjustmentsProperty,
   },
-  required: ["coaching_feedback", "estimated_calories"],
+  required: ["coaching_feedback", "estimated_calories", "vs_last_time", "adjustments"],
   additionalProperties: false,
 };
 
@@ -185,20 +218,32 @@ function describeRun(run: StructuredRunInput): string {
   return parts.join("\n");
 }
 
-export async function generateRunCoaching(run: StructuredRunInput): Promise<RunCoachingResult> {
-  const result = await parseWithTool<{ coaching_feedback: string; estimated_calories: number | null }>({
+export async function generateRunCoaching(run: StructuredRunInput, historyContext: string): Promise<RunCoachingResult> {
+  const result = await parseWithTool<{
+    coaching_feedback: string;
+    estimated_calories: number | null;
+    vs_last_time: string | null;
+    adjustments: string[];
+  }>({
     system:
       "You are a marathon running coach. The athlete logged a run using precise structured fields from their " +
       "watch/app — everything below is already extracted, there is nothing left to parse. Give brief, specific " +
-      "coaching feedback grounded in the exact numbers provided.",
-    userText: describeRun(run),
+      "coaching feedback grounded in the exact numbers provided. You'll also be given a list of the athlete's " +
+      "recent past runs (most recent first) — use it to find the most relevant prior run (same run type is the " +
+      "strongest match) and write a 'vs last time' comparison grounded in specific numbers from both, plus " +
+      "concrete adjustments for next time.",
+    userText:
+      `Today's run:\n${describeRun(run)}\n\n` +
+      `Recent run history for comparison (most recent first):\n${historyContext || "No prior runs logged yet."}`,
     toolName: "record_run_coaching",
-    toolDescription: "Records coaching feedback (and an optional calorie estimate) for an already-structured run.",
+    toolDescription: "Records 3-part coaching feedback (and an optional calorie estimate) for an already-structured run.",
     inputSchema: runCoachingSchema,
   });
   return {
     coaching_feedback: result.coaching_feedback,
     calories: run.calories ?? result.estimated_calories ?? null,
+    vs_last_time: result.vs_last_time,
+    adjustments: result.adjustments,
   };
 }
 

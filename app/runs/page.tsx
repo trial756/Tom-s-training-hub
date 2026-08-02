@@ -33,10 +33,23 @@ function parseClock(input: string): number | null {
   return parts[0];
 }
 
+// Formats a raw digit string (no colons) as a clock value, building from the
+// right: last 2 digits are seconds, the next 2 are minutes, anything left
+// over is hours. "10517" -> "1:05:17", "844" -> "8:44". Deleting the last
+// digit and reformatting naturally shortens it, so this doubles as the
+// backspace behavior too.
+function digitsToClock(digits: string): string {
+  const d = digits.replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, d.length - 2)}:${d.slice(-2)}`;
+  return `${d.slice(0, d.length - 4)}:${d.slice(-4, -2)}:${d.slice(-2)}`;
+}
+
 interface FormState {
   distance: string;
-  duration: string;
-  pace: string;
+  duration: string; // raw digits, e.g. "10517" for 1:05:17 — see digitsToClock
+  pace: string; // raw digits, e.g. "844" for 8:44
   avgHr: string;
   maxHr: string;
   cadence: string;
@@ -113,8 +126,8 @@ export default function RunsPage() {
           run_type: runType,
           logged_at: new Date(`${date}T12:00:00`).toISOString(),
           distance_miles: form.distance ? Number(form.distance) : null,
-          duration_seconds: parseClock(form.duration),
-          pace_seconds_per_mile: parseClock(form.pace),
+          duration_seconds: parseClock(digitsToClock(form.duration)),
+          pace_seconds_per_mile: parseClock(digitsToClock(form.pace)),
           avg_hr: form.avgHr ? Number(form.avgHr) : null,
           max_hr: form.maxHr ? Number(form.maxHr) : null,
           cadence_spm: form.cadence ? Number(form.cadence) : null,
@@ -217,8 +230,8 @@ export default function RunsPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Distance (mi)" value={form.distance} onChange={(v) => updateField("distance", v)} placeholder="6.2" disabled={submitting} />
-          <Field label="Duration (h:mm:ss)" value={form.duration} onChange={(v) => updateField("duration", v)} placeholder="0:54:10" disabled={submitting} />
-          <Field label="Avg Pace (mm:ss)" value={form.pace} onChange={(v) => updateField("pace", v)} placeholder="8:44" disabled={submitting} />
+          <ClockField label="Duration (h:mm:ss)" digits={form.duration} onChange={(v) => updateField("duration", v)} placeholder="0:54:10" disabled={submitting} />
+          <ClockField label="Avg Pace (mm:ss)" digits={form.pace} onChange={(v) => updateField("pace", v)} placeholder="8:44" disabled={submitting} />
           <Field label="Avg HR (bpm)" value={form.avgHr} onChange={(v) => updateField("avgHr", v)} placeholder="152" disabled={submitting} />
           <Field label="Max HR (bpm)" value={form.maxHr} onChange={(v) => updateField("maxHr", v)} placeholder="174" disabled={submitting} />
           <Field label="Cadence (spm)" value={form.cadence} onChange={(v) => updateField("cadence", v)} placeholder="172" disabled={submitting} />
@@ -288,7 +301,11 @@ export default function RunsPage() {
               {lastSaved.calories && <span>{lastSaved.calories} cal</span>}
               {lastSaved.surface && <span className="capitalize">{lastSaved.surface}</span>}
             </div>
-            <CoachingNote text={lastSaved.coaching_feedback} />
+            <CoachingNote
+              feedback={lastSaved.coaching_feedback}
+              vsLastTime={lastSaved.vs_last_time}
+              adjustments={lastSaved.adjustments}
+            />
           </div>
         </div>
       )}
@@ -348,6 +365,38 @@ function Field({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+// Type digits straight through and it auto-formats as a clock value
+// (e.g. "10517" -> "1:05:17"). `digits` is the raw, unformatted state;
+// the displayed value is always the formatted version.
+function ClockField({
+  label,
+  digits,
+  onChange,
+  placeholder,
+  disabled,
+}: {
+  label: string;
+  digits: string;
+  onChange: (digits: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</label>
+      <input
+        type="text"
+        inputMode="numeric"
+        className="input-field"
+        placeholder={placeholder}
+        value={digitsToClock(digits)}
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
         disabled={disabled}
       />
     </div>

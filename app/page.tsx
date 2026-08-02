@@ -122,13 +122,21 @@ export default function StatsPage() {
                       {" @ "}
                       {formatPace(stats.recentRuns[0].pace_seconds_per_mile)}
                     </p>
-                    <CoachingNote text={stats.recentRuns[0].coaching_feedback} />
+                    <CoachingNote
+                      feedback={stats.recentRuns[0].coaching_feedback}
+                      vsLastTime={stats.recentRuns[0].vs_last_time}
+                      adjustments={stats.recentRuns[0].adjustments}
+                    />
                   </div>
                 )}
                 {stats.recentWorkouts[0] && (
                   <div className="card">
                     <p className="text-xs text-gray-500">Workout · {formatDateTime(stats.recentWorkouts[0].logged_at)}</p>
-                    <CoachingNote text={stats.recentWorkouts[0].coaching_feedback} />
+                    <CoachingNote
+                      feedback={stats.recentWorkouts[0].coaching_feedback}
+                      vsLastTime={stats.recentWorkouts[0].vs_last_time}
+                      adjustments={stats.recentWorkouts[0].adjustments}
+                    />
                   </div>
                 )}
               </div>

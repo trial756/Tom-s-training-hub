@@ -18,6 +18,8 @@ export interface Workout {
   duration_minutes: number | null;
   notes: string | null;
   coaching_feedback: string | null;
+  vs_last_time: string | null;
+  adjustments: string[];
 }
 
 export const RUN_TYPES = ["Easy", "Long", "Tempo", "Marathon Pace", "Interval", "Race", "Other"] as const;
@@ -43,6 +45,8 @@ export interface Run {
   run_type: string | null;
   notes: string | null;
   coaching_feedback: string | null;
+  vs_last_time: string | null;
+  adjustments: string[];
 }
 
 export interface Meal {

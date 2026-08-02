@@ -131,7 +131,11 @@ export default function LogPage() {
             {lastSaved.duration_minutes && (
               <p className="mt-2 text-xs text-gray-500">{lastSaved.duration_minutes} min total</p>
             )}
-            <CoachingNote text={lastSaved.coaching_feedback} />
+            <CoachingNote
+              feedback={lastSaved.coaching_feedback}
+              vsLastTime={lastSaved.vs_last_time}
+              adjustments={lastSaved.adjustments}
+            />
           </div>
         </div>
       )}

@@ -37,6 +37,27 @@ function composeSummary(input: StructuredRunInput): string {
   return summary;
 }
 
+async function buildRunHistoryContext(): Promise<string> {
+  const { data } = await supabaseAdmin()
+    .from("runs")
+    .select("logged_at, run_type, distance_miles, duration_seconds, pace_seconds_per_mile, avg_hr, elev_gain_ft")
+    .order("logged_at", { ascending: false })
+    .limit(15);
+
+  return (data ?? [])
+    .map((r) => {
+      const date = new Date(r.logged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const bits = [`${r.run_type ?? "Run"}`];
+      if (r.distance_miles != null) bits.push(`${r.distance_miles}mi`);
+      if (r.duration_seconds != null) bits.push(`in ${formatDuration(r.duration_seconds)}`);
+      if (r.pace_seconds_per_mile != null) bits.push(`(${formatPace(r.pace_seconds_per_mile)})`);
+      if (r.avg_hr != null) bits.push(`avg HR ${r.avg_hr}`);
+      if (r.elev_gain_ft != null) bits.push(`+${r.elev_gain_ft}ft`);
+      return `${date} — ${bits.join(" ")}`;
+    })
+    .join("\n");
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -70,7 +91,8 @@ export async function POST(req: NextRequest) {
       notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null,
     };
 
-    const coaching = await generateRunCoaching(structured);
+    const historyContext = await buildRunHistoryContext();
+    const coaching = await generateRunCoaching(structured, historyContext);
 
     const { data, error } = await supabaseAdmin()
       .from("runs")
@@ -91,6 +113,8 @@ export async function POST(req: NextRequest) {
         run_type: structured.run_type,
         notes: structured.notes,
         coaching_feedback: coaching.coaching_feedback,
+        vs_last_time: coaching.vs_last_time,
+        adjustments: coaching.adjustments,
         logged_at: body.logged_at ?? new Date().toISOString(),
       })
       .select()
