@@ -20,6 +20,12 @@ export interface Workout {
   coaching_feedback: string | null;
   vs_last_time: string | null;
   adjustments: string[];
+  type: string | null;
+  muscle_groups: string[];
+  intensity: string | null;
+  calories_burned_est: number | null;
+  summary: string | null;
+  weekly_note: string | null;
 }
 
 export const RUN_TYPES = ["Easy", "Long", "Tempo", "Marathon Pace", "Interval", "Race", "Other"] as const;
@@ -47,6 +53,11 @@ export interface Run {
   coaching_feedback: string | null;
   vs_last_time: string | null;
   adjustments: string[];
+  feel: string | null;
+  shoes: string | null;
+  pace_note: string | null;
+  summary: string | null;
+  weekly_note: string | null;
 }
 
 export interface Meal {
@@ -62,6 +73,7 @@ export interface Meal {
   items: string[];
   notes: string | null;
   coaching_feedback: string | null;
+  summary: string | null;
 }
 
 export type FavoriteType = "workout" | "run" | "meal";

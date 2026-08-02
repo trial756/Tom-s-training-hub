@@ -20,6 +20,12 @@ create table if not exists workouts (
 -- Idempotent — safe to re-run against a database created before these columns existed.
 alter table workouts add column if not exists vs_last_time text;
 alter table workouts add column if not exists adjustments jsonb not null default '[]'::jsonb;
+alter table workouts add column if not exists type text; -- e.g. Chest Day, Back Day, Leg Day, Yoga, Rest Day
+alter table workouts add column if not exists muscle_groups jsonb not null default '[]'::jsonb; -- [string]
+alter table workouts add column if not exists intensity text; -- low | moderate | high
+alter table workouts add column if not exists calories_burned_est integer;
+alter table workouts add column if not exists summary text; -- one-line AI summary for list views
+alter table workouts add column if not exists weekly_note text;
 
 create index if not exists workouts_logged_at_idx on workouts (logged_at desc);
 
@@ -58,6 +64,11 @@ alter table runs add column if not exists humidity_pct integer;
 alter table runs add column if not exists surface text;
 alter table runs add column if not exists vs_last_time text;
 alter table runs add column if not exists adjustments jsonb not null default '[]'::jsonb;
+alter table runs add column if not exists feel text; -- how the run felt, e.g. Strong, Tired, Sore
+alter table runs add column if not exists shoes text;
+alter table runs add column if not exists pace_note text; -- pace vs. goal pace commentary
+alter table runs add column if not exists summary text; -- one-line AI summary for list views
+alter table runs add column if not exists weekly_note text;
 
 create index if not exists runs_logged_at_idx on runs (logged_at desc);
 
@@ -77,6 +88,9 @@ create table if not exists meals (
   coaching_feedback text
 );
 
+-- Idempotent — safe to re-run against a database created before this column existed.
+alter table meals add column if not exists summary text; -- one-line AI summary for list views
+
 create index if not exists meals_logged_at_idx on meals (logged_at desc);
 
 -- ── Favorites ─────────────────────────────────────────────────────────────
@@ -91,7 +105,18 @@ create table if not exists favorites (
   data jsonb not null default '{}'::jsonb
 );
 
+-- Idempotent — additive columns for a future meal-only, count-based
+-- auto-favoriting model (see CLAUDE.md). Existing type/name/raw_text
+-- columns and their NOT NULL constraints are left untouched — the current
+-- generic per-type favorites feature keeps working unchanged until it's
+-- replaced.
+alter table favorites add column if not exists key text; -- dedupe key for auto-favoriting, e.g. normalized meal description
+alter table favorites add column if not exists count integer not null default 1; -- times logged, drives auto-favorite threshold
+alter table favorites add column if not exists manual boolean not null default false; -- true if user starred it directly
+alter table favorites add column if not exists updated_at timestamptz not null default now();
+
 create index if not exists favorites_type_idx on favorites (type);
+create unique index if not exists favorites_key_idx on favorites (key) where key is not null;
 
 -- ── Row Level Security ──────────────────────────────────────────────────────
 -- This app is single-tenant: all reads/writes go through server-side API
