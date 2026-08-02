@@ -109,7 +109,7 @@ export default function FuelPage() {
         <button type="submit" className="btn-primary mt-3 w-full" disabled={submitting || !text.trim()}>
           {submitting ? "Parsing with AI…" : "Log Meal"}
         </button>
-        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </form>
 
       {submitting && <Spinner label="Claude is estimating macros…" />}

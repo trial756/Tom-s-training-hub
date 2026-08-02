@@ -16,7 +16,7 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-base-700 bg-black/95 backdrop-blur">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-base-700 bg-base-950/95 backdrop-blur">
       <div className="mx-auto flex max-w-lg items-stretch justify-between px-1 pb-[calc(env(safe-area-inset-bottom)+4px)] pt-1">
         {TABS.map((tab) => {
           const active = pathname === tab.href;
@@ -29,7 +29,7 @@ export default function BottomNav() {
             >
               <Icon active={active} />
               <span
-                className={`text-[10px] font-medium ${active ? "text-accent" : "text-gray-500"}`}
+                className={`text-[10px] font-medium ${active ? "text-accent" : "text-faint"}`}
               >
                 {tab.label}
               </span>
@@ -45,7 +45,7 @@ type IconProps = { active: boolean };
 
 function StatsIcon({ active }: IconProps) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#ff5b2e" : "#6b7280"} strokeWidth="2" strokeLinecap="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#00e676" : "#6b6b6b"} strokeWidth="2" strokeLinecap="round">
       <path d="M4 20V10M12 20V4M20 20v-7" />
     </svg>
   );
@@ -53,7 +53,7 @@ function StatsIcon({ active }: IconProps) {
 
 function LogIcon({ active }: IconProps) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#ff5b2e" : "#6b7280"} strokeWidth="2" strokeLinecap="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#00e676" : "#6b6b6b"} strokeWidth="2" strokeLinecap="round">
       <path d="M6.5 6.5h11a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z" />
       <path d="M9 3v4M15 3v4M8 13h8M8 17h5" />
     </svg>
@@ -62,8 +62,8 @@ function LogIcon({ active }: IconProps) {
 
 function RunIcon({ active }: IconProps) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#ff5b2e" : "#6b7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="16.5" cy="4.5" r="1.8" fill={active ? "#ff5b2e" : "#6b7280"} stroke="none" />
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#00e676" : "#6b6b6b"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="16.5" cy="4.5" r="1.8" fill={active ? "#00e676" : "#6b6b6b"} stroke="none" />
       <path d="M13.5 8 10 10l1.5 3.5L9 15l-2.5 5M13.5 8l3 2 3.5-1M13.5 8 12 12l3.5 1.5.5 4.5" />
     </svg>
   );
@@ -71,7 +71,7 @@ function RunIcon({ active }: IconProps) {
 
 function FuelIcon({ active }: IconProps) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#ff5b2e" : "#6b7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#00e676" : "#6b6b6b"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M7 3v6a3 3 0 0 0 6 0V3M10 9v12M17 3v18M17 3c2 0 3 1.5 3 4v3c0 1.5-1 2-3 2" />
     </svg>
   );
@@ -79,7 +79,7 @@ function FuelIcon({ active }: IconProps) {
 
 function HistoryIcon({ active }: IconProps) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#ff5b2e" : "#6b7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#00e676" : "#6b6b6b"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 12a9 9 0 1 0 2.6-6.3L3 8" />
       <path d="M3 3v5h5M12 7v5l4 2" />
     </svg>
@@ -88,7 +88,7 @@ function HistoryIcon({ active }: IconProps) {
 
 function MarathonIcon({ active }: IconProps) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#ff5b2e" : "#6b7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#00e676" : "#6b6b6b"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 21 9 7l3 4 3-4 5 14" />
       <path d="M7 15h10" />
     </svg>

@@ -4,7 +4,7 @@
   "description": "AI-powered training, running, and fueling log for marathon prep.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#080808",
+  "theme_color": "#080808",
   "orientation": "portrait"
 }

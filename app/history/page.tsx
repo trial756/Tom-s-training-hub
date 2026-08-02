@@ -172,7 +172,7 @@ function HistoryCard({
           <span className={`pill ${kindColor} capitalize`}>{kind}</span>
           <span className="text-xs text-gray-500">{formatDateTime(item.logged_at)}</span>
         </div>
-        <button onClick={() => onDelete(kind, item.id)} disabled={busy} className="text-xs text-gray-600 active:text-red-400">
+        <button onClick={() => onDelete(kind, item.id)} disabled={busy} className="text-xs text-gray-600 active:text-danger">
           {busy ? "…" : "Delete"}
         </button>
       </div>

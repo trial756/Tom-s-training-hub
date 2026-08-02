@@ -255,7 +255,7 @@ export default function RunsPage() {
         <button type="submit" className="btn-primary mt-4 w-full" disabled={submitting || !runType}>
           {submitting ? "Getting coaching feedback…" : "Log Run"}
         </button>
-        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </form>
 
       {submitting && <Spinner label="Claude is reviewing your run…" />}

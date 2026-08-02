@@ -9,23 +9,28 @@ const config: Config = {
     extend: {
       colors: {
         base: {
-          950: "#000000",
-          900: "#0a0a0a",
-          800: "#131313",
-          700: "#1c1c1c",
-          600: "#2a2a2a",
-          500: "#3d3d3d",
+          950: "#080808", // page background
+          900: "#0f0f0f", // card background
+          800: "#151515", // secondary surface (pills, inputs at rest)
+          700: "#242424", // card / input borders
+          600: "#2e2e2e", // hover / active borders
+          500: "#454545",
         },
+        ink: "#f5f5f5", // primary text — bg-ink/text-ink/border-ink all valid
+        muted: "#9a9a9a",
+        faint: "#6b6b6b",
         accent: {
-          DEFAULT: "#ff5b2e",
-          light: "#ff7b52",
-          dark: "#d8461f",
+          DEFAULT: "#00e676", // electric green — primary CTA / active states
+          light: "#33ea8f",
+          dark: "#00c765",
         },
+        danger: "#ff5277",
         run: "#2ec4b6",
         fuel: "#ffb703",
       },
       fontFamily: {
         sans: [
+          "var(--font-inter)",
           "-apple-system",
           "BlinkMacSystemFont",
           "Segoe UI",

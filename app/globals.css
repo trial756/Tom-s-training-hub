@@ -4,7 +4,7 @@
 
 html,
 body {
-  background-color: #000000;
+  background-color: #080808;
   color: #f5f5f5;
   overscroll-behavior-y: none;
 }
@@ -23,15 +23,15 @@ body {
   }
 
   .btn-primary {
-    @apply rounded-xl bg-accent px-4 py-3 text-center font-semibold text-white active:bg-accent-dark transition-colors disabled:opacity-40;
+    @apply rounded-xl bg-accent px-4 py-3 text-center font-semibold text-base-950 active:bg-accent-dark transition-colors disabled:opacity-40;
   }
 
   .btn-secondary {
-    @apply rounded-xl bg-base-800 border border-base-600 px-4 py-3 text-center font-medium text-gray-200 active:bg-base-700 transition-colors;
+    @apply rounded-xl bg-base-800 border border-base-600 px-4 py-3 text-center font-medium text-ink active:bg-base-700 transition-colors;
   }
 
   .input-field {
-    @apply w-full rounded-xl bg-base-800 border border-base-600 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent transition-colors;
+    @apply w-full rounded-xl bg-base-800 border border-base-600 px-4 py-3 text-ink placeholder-faint focus:outline-none focus:border-accent transition-colors;
   }
 
   .pill {

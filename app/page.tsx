@@ -54,15 +54,15 @@ export default function StatsPage() {
       </div>
 
       {loading && <Spinner label="Loading stats…" />}
-      {error && <p className="px-4 text-sm text-red-400">{error}</p>}
+      {error && <p className="px-4 text-sm text-danger">{error}</p>}
 
       {stats && (
         <>
           <div className="mt-4 grid grid-cols-2 gap-3 px-4">
             <StatTile label="Weekly Mileage" value={stats.week.mileage} unit="mi" accentColor="#2ec4b6" />
             <StatTile label="Runs This Week" value={stats.week.runCount} accentColor="#2ec4b6" />
-            <StatTile label="Workouts This Week" value={stats.week.workoutCount} accentColor="#ff5b2e" />
-            <StatTile label="Run Time" value={formatDuration(stats.week.runSeconds)} accentColor="#ff5b2e" />
+            <StatTile label="Workouts This Week" value={stats.week.workoutCount} accentColor="#00e676" />
+            <StatTile label="Run Time" value={formatDuration(stats.week.runSeconds)} accentColor="#00e676" />
           </div>
 
           <div className="mt-4 px-4">
