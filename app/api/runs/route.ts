@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
       notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null,
       feel: typeof body.feel === "string" && body.feel.trim() ? body.feel.trim() : null,
     };
+    const shoes = typeof body.shoes === "string" && body.shoes.trim() ? body.shoes.trim() : null;
 
     const historyContext = await buildRunHistoryContext();
     const coaching = await generateRunCoaching(structured, historyContext);
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest) {
         run_type: structured.run_type,
         notes: structured.notes,
         feel: structured.feel,
+        shoes,
         coaching_feedback: coaching.coaching_feedback,
         vs_last_time: coaching.vs_last_time,
         adjustments: coaching.adjustments,

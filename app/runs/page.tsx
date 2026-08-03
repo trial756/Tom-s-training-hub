@@ -7,6 +7,7 @@ import Spinner from "@/components/Spinner";
 import type { Run } from "@/lib/types";
 import { RUN_TYPES } from "@/lib/types";
 import { formatDateTime, formatDuration, formatPace } from "@/lib/format";
+import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
 
 const RUN_TYPE_COLORS: Record<string, string> = {
   Easy: "bg-run/20 text-run",
@@ -17,6 +18,25 @@ const RUN_TYPE_COLORS: Record<string, string> = {
   Race: "bg-red-500/20 text-red-300",
   Other: "bg-gray-500/20 text-gray-300",
 };
+
+const FEEL_CHIPS = [
+  { emoji: "🔥", label: "Great" },
+  { emoji: "😊", label: "Good" },
+  { emoji: "😐", label: "Okay" },
+  { emoji: "😓", label: "Tough" },
+  { emoji: "💀", label: "Rough" },
+];
+
+// Goal marathon pace is 8:01/mi (481s). Green = at or ahead of goal, amber =
+// within 60s of it, red = more than 60s slower. Applied uniformly regardless
+// of run type, matching the reference artifact's simple at-a-glance coding.
+function paceColorClass(paceSecondsPerMile: number | null | undefined): string {
+  if (!paceSecondsPerMile) return "text-gray-300";
+  const diff = paceSecondsPerMile - GOAL_PACE_SECONDS_PER_MILE;
+  if (diff <= 0) return "text-accent";
+  if (diff <= 60) return "text-fuel";
+  return "text-danger";
+}
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -59,6 +79,7 @@ interface FormState {
   temp: string;
   humidity: string;
   surface: string;
+  shoes: string;
   notes: string;
 }
 
@@ -75,12 +96,14 @@ const EMPTY_FORM: FormState = {
   temp: "",
   humidity: "",
   surface: "",
+  shoes: "",
   notes: "",
 };
 
 export default function RunsPage() {
   const [date, setDate] = useState(todayISO());
   const [runType, setRunType] = useState<string>("");
+  const [feel, setFeel] = useState<string>("");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +112,7 @@ export default function RunsPage() {
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [savingFavorite, setSavingFavorite] = useState(false);
   const [favoriteSaved, setFavoriteSaved] = useState(false);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     loadRecent();
@@ -137,7 +161,9 @@ export default function RunsPage() {
           temp_f: form.temp ? Number(form.temp) : null,
           humidity_pct: form.humidity ? Number(form.humidity) : null,
           surface: form.surface || null,
+          shoes: form.shoes || null,
           notes: form.notes || null,
+          feel: feel || null,
         }),
       });
       const json = await res.json();
@@ -145,6 +171,7 @@ export default function RunsPage() {
       setLastSaved(json.run);
       setForm(EMPTY_FORM);
       setRunType("");
+      setFeel("");
       setDate(todayISO());
       loadRecent();
     } catch (err) {
@@ -153,6 +180,19 @@ export default function RunsPage() {
       setSubmitting(false);
     }
   }
+
+  function copyLastRun() {
+    const last = recent[0];
+    if (!last) return;
+    setRunType(last.run_type ?? "");
+    setForm((prev) => ({ ...prev, surface: last.surface ?? "", shoes: last.shoes ?? "" }));
+  }
+
+  const filteredRecent = recent.filter((r) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [r.run_type, r.surface, r.shoes, r.notes, r.feel].filter(Boolean).some((v) => v!.toLowerCase().includes(q));
+  });
 
   async function saveFavorite() {
     if (!lastSaved) return;
@@ -184,6 +224,8 @@ export default function RunsPage() {
             temp_f: lastSaved.temp_f,
             humidity_pct: lastSaved.humidity_pct,
             surface: lastSaved.surface,
+            shoes: lastSaved.shoes,
+            feel: lastSaved.feel,
             notes: lastSaved.notes,
             coaching_feedback: lastSaved.coaching_feedback,
           },
@@ -200,14 +242,26 @@ export default function RunsPage() {
       <PageHeader title="Log a Run" subtitle="Pick a type, fill in what you've got." />
 
       <form onSubmit={handleSubmit} className="px-4">
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Date</label>
-        <input
-          type="date"
-          className="input-field mb-4"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          disabled={submitting}
-        />
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <div className="flex-1">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Date</label>
+            <input
+              type="date"
+              className="input-field"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              disabled={submitting}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={copyLastRun}
+            disabled={submitting || recent.length === 0}
+            className="whitespace-nowrap rounded-xl border border-base-600 bg-base-800 px-3 py-3 text-sm font-medium text-gray-300 active:border-accent active:text-accent disabled:opacity-40"
+          >
+            Copy last run
+          </button>
+        </div>
 
         <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">Run Type</label>
         <div className="mb-4 flex flex-wrap gap-2">
@@ -228,6 +282,25 @@ export default function RunsPage() {
           ))}
         </div>
 
+        <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">Feel</label>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {FEEL_CHIPS.map((f) => (
+            <button
+              key={f.label}
+              type="button"
+              onClick={() => setFeel((prev) => (prev === f.label ? "" : f.label))}
+              disabled={submitting}
+              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                feel === f.label
+                  ? "border-accent bg-accent text-white"
+                  : "border-base-600 bg-base-800 text-gray-300 active:border-accent"
+              }`}
+            >
+              {f.emoji} {f.label}
+            </button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <Field label="Distance (mi)" value={form.distance} onChange={(v) => updateField("distance", v)} placeholder="6.2" disabled={submitting} />
           <ClockField label="Duration (h:mm:ss)" digits={form.duration} onChange={(v) => updateField("duration", v)} placeholder="0:54:10" disabled={submitting} />
@@ -241,6 +314,7 @@ export default function RunsPage() {
           <Field label="Temp (°F)" value={form.temp} onChange={(v) => updateField("temp", v)} placeholder="72" disabled={submitting} />
           <Field label="Humidity (%)" value={form.humidity} onChange={(v) => updateField("humidity", v)} placeholder="55" disabled={submitting} />
           <Field label="Surface" value={form.surface} onChange={(v) => updateField("surface", v)} placeholder="road, trail…" disabled={submitting} type="text" />
+          <Field label="Shoes" value={form.shoes} onChange={(v) => updateField("shoes", v)} placeholder="Brooks Ghost 15" disabled={submitting} type="text" />
         </div>
 
         <label className="mb-1 mt-4 block text-xs font-semibold uppercase tracking-wide text-gray-500">Notes (optional)</label>
@@ -285,7 +359,9 @@ export default function RunsPage() {
                 <p className="text-[11px] text-gray-500">time</p>
               </div>
               <div>
-                <p className="text-lg font-bold text-white">{formatPace(lastSaved.pace_seconds_per_mile)}</p>
+                <p className={`text-lg font-bold ${paceColorClass(lastSaved.pace_seconds_per_mile)}`}>
+                  {formatPace(lastSaved.pace_seconds_per_mile)}
+                </p>
                 <p className="text-[11px] text-gray-500">pace</p>
               </div>
             </div>
@@ -300,7 +376,10 @@ export default function RunsPage() {
               )}
               {lastSaved.calories && <span>{lastSaved.calories} cal</span>}
               {lastSaved.surface && <span className="capitalize">{lastSaved.surface}</span>}
+              {lastSaved.shoes && <span>{lastSaved.shoes}</span>}
+              {lastSaved.feel && <span>{FEEL_CHIPS.find((f) => f.label === lastSaved.feel)?.emoji} {lastSaved.feel}</span>}
             </div>
+            {lastSaved.pace_note && <p className="mt-2 text-center text-xs text-gray-500">{lastSaved.pace_note}</p>}
             <CoachingNote
               feedback={lastSaved.coaching_feedback}
               vsLastTime={lastSaved.vs_last_time}
@@ -312,13 +391,22 @@ export default function RunsPage() {
 
       <div className="mt-6 px-4">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Recent Runs</h2>
+        <input
+          type="text"
+          className="input-field mb-3"
+          placeholder="Search by type, surface, shoes, notes…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         {loadingRecent ? (
           <Spinner />
         ) : recent.length === 0 ? (
           <p className="text-sm text-gray-500">No runs logged yet.</p>
+        ) : filteredRecent.length === 0 ? (
+          <p className="text-sm text-gray-500">No runs match “{search}”.</p>
         ) : (
           <div className="space-y-2">
-            {recent.map((r) => (
+            {filteredRecent.map((r) => (
               <div key={r.id} className="card flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2">
@@ -328,7 +416,10 @@ export default function RunsPage() {
                     <span className="text-xs text-gray-500">{formatDateTime(r.logged_at)}</span>
                   </div>
                   <p className="mt-1 text-sm text-gray-300">
-                    {r.distance_miles ?? "?"} mi · {formatPace(r.pace_seconds_per_mile)} · {formatDuration(r.duration_seconds)}
+                    {r.distance_miles ?? "?"} mi ·{" "}
+                    <span className={paceColorClass(r.pace_seconds_per_mile)}>{formatPace(r.pace_seconds_per_mile)}</span> ·{" "}
+                    {formatDuration(r.duration_seconds)}
+                    {r.shoes ? ` · ${r.shoes}` : ""}
                   </p>
                 </div>
               </div>
