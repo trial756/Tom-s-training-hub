@@ -1,21 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
-import type { Workout } from "@/lib/types";
-import { formatDateTime } from "@/lib/format";
+import type { Run, Workout } from "@/lib/types";
+import { formatDateTime, formatDuration, formatPace } from "@/lib/format";
+
+const QUICK_LOG_CHIPS: { label: string; prefill: string }[] = [
+  { label: "Chest Day", prefill: "Chest day: " },
+  { label: "Back Day", prefill: "Back day: " },
+  { label: "Leg Day", prefill: "Leg day: " },
+  { label: "Shoulders", prefill: "Shoulders: " },
+  { label: "Arms", prefill: "Arms: " },
+  { label: "Core", prefill: "Core: " },
+  { label: "Yoga", prefill: "Yoga: " },
+  { label: "Rest Day", prefill: "Rest day — no workout today." },
+];
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+type RecentEntry = { kind: "workout"; item: Workout } | { kind: "run"; item: Run };
 
 export default function LogPage() {
+  const [date, setDate] = useState(todayISO());
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Workout | null>(null);
-  const [recent, setRecent] = useState<Workout[]>([]);
+  const [recent, setRecent] = useState<RecentEntry[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [savingFavorite, setSavingFavorite] = useState(false);
   const [favoriteSaved, setFavoriteSaved] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     loadRecent();
@@ -24,12 +43,29 @@ export default function LogPage() {
   async function loadRecent() {
     setLoadingRecent(true);
     try {
-      const res = await fetch("/api/workouts?limit=5");
-      const json = await res.json();
-      setRecent(json.workouts ?? []);
+      const [w, r] = await Promise.all([
+        fetch("/api/workouts?limit=4").then((res) => res.json()),
+        fetch("/api/runs?limit=4").then((res) => res.json()),
+      ]);
+      const combined: RecentEntry[] = [
+        ...((w.workouts ?? []) as Workout[]).map((item) => ({ kind: "workout" as const, item })),
+        ...((r.runs ?? []) as Run[]).map((item) => ({ kind: "run" as const, item })),
+      ];
+      combined.sort((a, b) => new Date(b.item.logged_at).getTime() - new Date(a.item.logged_at).getTime());
+      setRecent(combined.slice(0, 4));
     } finally {
       setLoadingRecent(false);
     }
+  }
+
+  function applyQuickLog(prefill: string) {
+    setText(prefill);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -42,12 +78,13 @@ export default function LogPage() {
       const res = await fetch("/api/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, logged_at: new Date(`${date}T12:00:00`).toISOString() }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to log workout.");
       setLastSaved(json.workout);
       setText("");
+      setDate(todayISO());
       loadRecent();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -87,8 +124,32 @@ export default function LogPage() {
     <div>
       <PageHeader title="Log a Workout" subtitle="Describe it in plain English — AI handles the rest." />
 
+      <div className="mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        {QUICK_LOG_CHIPS.map((chip) => (
+          <button
+            key={chip.label}
+            type="button"
+            onClick={() => applyQuickLog(chip.prefill)}
+            disabled={submitting}
+            className="whitespace-nowrap rounded-full border border-base-600 bg-base-800 px-3.5 py-1.5 text-sm font-medium text-gray-300 transition-colors active:border-accent active:text-accent"
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
       <form onSubmit={handleSubmit} className="px-4">
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Date</label>
+        <input
+          type="date"
+          className="input-field mb-4"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          disabled={submitting}
+        />
+
         <textarea
+          ref={textareaRef}
           className="input-field min-h-[120px] resize-none"
           placeholder="e.g. Bench press 3x8 at 135, squats 4x5 at 185, then 3 sets of pull-ups to failure. Felt strong today, ~45 min total."
           value={text}
@@ -141,22 +202,32 @@ export default function LogPage() {
       )}
 
       <div className="mt-6 px-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Recent Workouts</h2>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Recent</h2>
         {loadingRecent ? (
           <Spinner />
         ) : recent.length === 0 ? (
-          <p className="text-sm text-gray-500">No workouts logged yet.</p>
+          <p className="text-sm text-gray-500">Nothing logged yet.</p>
         ) : (
           <div className="space-y-2">
-            {recent.map((w) => (
-              <div key={w.id} className="card">
+            {recent.map((entry) => (
+              <div key={`${entry.kind}-${entry.item.id}`} className="card">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">{formatDateTime(w.logged_at)}</span>
-                  {w.duration_minutes && <span className="text-xs text-gray-500">{w.duration_minutes} min</span>}
+                  <span className={`pill capitalize ${entry.kind === "run" ? "bg-run/20 text-run" : "bg-accent/20 text-accent"}`}>
+                    {entry.kind}
+                  </span>
+                  <span className="text-xs text-gray-500">{formatDateTime(entry.item.logged_at)}</span>
                 </div>
-                <p className="mt-1 text-sm text-gray-300">
-                  {w.exercises.map((e) => e.name).join(", ") || w.raw_text}
-                </p>
+                {entry.kind === "workout" ? (
+                  <p className="mt-1 text-sm text-gray-300">
+                    {entry.item.exercises.map((e) => e.name).join(", ") || entry.item.raw_text}
+                    {entry.item.duration_minutes ? ` · ${entry.item.duration_minutes} min` : ""}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-gray-300">
+                    {entry.item.distance_miles ?? "?"} mi · {formatPace(entry.item.pace_seconds_per_mile)} · {formatDuration(entry.item.duration_seconds)}
+                    {entry.item.run_type ? ` · ${entry.item.run_type}` : ""}
+                  </p>
+                )}
               </div>
             ))}
           </div>
