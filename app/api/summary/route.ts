@@ -1,20 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { summarizeTraining } from "@/lib/anthropic";
-import { formatPace } from "@/lib/format";
+import { formatPace, localDateKey, startOfLocalDay } from "@/lib/format";
 
 export const runtime = "nodejs";
-
-// Local-date helpers (not toISOString() slicing) so the range boundary and
-// per-day meal-coverage bucketing follow the server's local calendar day
-// rather than rolling over at UTC midnight.
-function startOfLocalDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function localDateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 export async function GET(req: NextRequest) {
   try {

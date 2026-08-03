@@ -36,3 +36,21 @@ export function formatShortDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+
+export function formatMinutes(totalMinutes: number | null | undefined): string {
+  if (!totalMinutes || totalMinutes <= 0) return "—";
+  const h = Math.floor(totalMinutes / 60);
+  const m = Math.round(totalMinutes % 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m} min`;
+}
+
+// Local-date helpers (not toISOString() slicing) so day boundaries follow
+// the local calendar rather than rolling over at UTC midnight.
+export function startOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+export function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
