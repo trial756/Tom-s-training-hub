@@ -6,7 +6,7 @@ import Spinner from "@/components/Spinner";
 import CoachingNote from "@/components/CoachingNote";
 import UndoToast from "@/components/UndoToast";
 import type { Favorite, Meal, Run, Workout } from "@/lib/types";
-import { formatDateTime, formatDuration, formatPace } from "@/lib/format";
+import { formatDateTime, formatDuration, formatPace, summarizeExerciseNames } from "@/lib/format";
 
 type Filter = "all" | "workouts" | "runs" | "meals" | "favorites";
 type WorkoutType = "strength" | "cardio" | "hiit" | "flexibility" | "run" | "other";
@@ -293,7 +293,7 @@ function HistoryCard({
 
           {kind === "workout" && (
             <>
-              <p className="mt-1 text-sm text-gray-300">{item.summary || item.exercises.map((ex) => ex.name).join(", ") || item.raw_text}</p>
+              <p className="mt-1 text-sm text-gray-300">{item.summary || summarizeExerciseNames(item.exercises) || item.raw_text}</p>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
                 <span>{item.exercises.length} exercise{item.exercises.length === 1 ? "" : "s"}</span>
                 {item.calories_burned_est != null && <span>{item.calories_burned_est} cal</span>}

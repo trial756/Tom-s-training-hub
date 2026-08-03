@@ -32,6 +32,17 @@ export function formatDateTime(iso: string | null | undefined): string {
   });
 }
 
+// Short label for a workout's exercise list when no AI summary is
+// available (e.g. entries logged before the summary field existed) — caps
+// at `max` names so a long session doesn't turn into an unreadable wall of
+// text wherever it's used as a one-line fallback.
+export function summarizeExerciseNames(exercises: { name: string }[], max = 3): string {
+  const names = exercises.map((e) => e.name);
+  if (names.length === 0) return "";
+  if (names.length <= max) return names.join(", ");
+  return `${names.slice(0, max).join(", ")} +${names.length - max} more`;
+}
+
 export function formatShortDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });

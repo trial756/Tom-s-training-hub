@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { localDateKey, startOfLocalDay } from "@/lib/format";
+import { localDateKey, startOfLocalDay, summarizeExerciseNames } from "@/lib/format";
 
 export const runtime = "nodejs";
 
@@ -43,10 +43,14 @@ export async function GET(req: NextRequest) {
       ? Math.round(runsWithPace.reduce((sum, r) => sum + Number(r.pace_seconds_per_mile), 0) / runsWithPace.length)
       : null;
 
+    // Credits each workout's full exercise count to every muscle group it's
+    // tagged with (muscle groups are tagged per-workout, not per-exercise) —
+    // this reads as "exercises per area" rather than just session frequency.
     const muscleGroupCounts = new Map<string, number>();
     for (const w of workouts) {
+      const exerciseCount = ((w.exercises ?? []) as ExerciseLike[]).length || 1;
       for (const g of (w.muscle_groups ?? []) as string[]) {
-        muscleGroupCounts.set(g, (muscleGroupCounts.get(g) ?? 0) + 1);
+        muscleGroupCounts.set(g, (muscleGroupCounts.get(g) ?? 0) + exerciseCount);
       }
     }
     const muscleGroups = Array.from(muscleGroupCounts.entries())
@@ -75,7 +79,7 @@ export async function GET(req: NextRequest) {
       const bucket = dayBuckets.get(localDateKey(new Date(w.logged_at)));
       if (bucket) {
         bucket.workouts.push(
-          w.summary || ((w.exercises ?? []) as ExerciseLike[]).map((e) => e.name).join(", ") || "Workout"
+          w.summary || summarizeExerciseNames((w.exercises ?? []) as ExerciseLike[]) || "Workout"
         );
       }
     }

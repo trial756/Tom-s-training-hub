@@ -5,7 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
 import type { Run, Workout } from "@/lib/types";
-import { formatDateTime, formatDuration, formatPace, localDateKey } from "@/lib/format";
+import { formatDateTime, formatDuration, formatPace, localDateKey, summarizeExerciseNames } from "@/lib/format";
 
 const QUICK_LOG_CHIPS: { label: string; prefill: string }[] = [
   { label: "Chest Day", prefill: "Chest day: " },
@@ -219,7 +219,7 @@ export default function LogPage() {
                 </div>
                 {entry.kind === "workout" ? (
                   <p className="mt-1 text-sm text-gray-300">
-                    {entry.item.exercises.map((e) => e.name).join(", ") || entry.item.raw_text}
+                    {entry.item.summary || summarizeExerciseNames(entry.item.exercises) || entry.item.raw_text}
                     {entry.item.duration_minutes ? ` · ${entry.item.duration_minutes} min` : ""}
                   </p>
                 ) : (

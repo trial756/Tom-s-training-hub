@@ -134,6 +134,7 @@ export default function StatsPage() {
   const daysToRace = Math.max(0, Math.round((raceDate.getTime() - today.getTime()) / 86400000));
 
   const maxMuscleCount = stats ? Math.max(...stats.muscleGroups.map((m) => m.count), 1) : 1;
+  const totalMuscleHits = stats ? stats.muscleGroups.reduce((sum, m) => sum + m.count, 0) : 0;
   const activeDays = stats ? stats.dailySummary.filter((d) => d.workouts.length + d.runs.length + d.meals.length > 0) : [];
 
   return (
@@ -188,25 +189,37 @@ export default function StatsPage() {
             <StatTile label="Gym Time" value={formatMinutes(stats.gymTimeMinutes)} accentColor="#00e676" />
           </div>
 
-          {stats.muscleGroups.length > 0 && (
-            <div className="mt-4 px-4">
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Muscle Groups Hit</h2>
-              <div className="card space-y-2">
-                {stats.muscleGroups.map((m) => (
-                  <div key={m.group} className="flex items-center gap-2">
-                    <span className="w-20 shrink-0 text-xs text-gray-400">{m.group}</span>
-                    <div className="h-3 flex-1 rounded-full bg-base-800">
-                      <div
-                        className="h-3 rounded-full bg-accent"
-                        style={{ width: `${Math.max(6, (m.count / maxMuscleCount) * 100)}%` }}
-                      />
-                    </div>
-                    <span className="w-4 shrink-0 text-right text-xs text-gray-500">{m.count}</span>
-                  </div>
-                ))}
+          <div className="mt-4 px-4">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Muscle Groups Hit</h2>
+            {stats.muscleGroups.length === 0 ? (
+              <div className="card">
+                <p className="text-sm text-gray-500">
+                  No muscle groups tagged in this range yet. They&apos;ll show up here as you log workouts.
+                </p>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="card">
+                <p className="mb-3 text-xs text-gray-500">
+                  {totalMuscleHits} exercise{totalMuscleHits === 1 ? "" : "s"} across {stats.muscleGroups.length} area
+                  {stats.muscleGroups.length === 1 ? "" : "s"}
+                </p>
+                <div className="space-y-2.5">
+                  {stats.muscleGroups.map((m) => (
+                    <div key={m.group} className="flex items-center gap-2">
+                      <span className="w-20 shrink-0 truncate text-xs text-gray-400">{m.group}</span>
+                      <div className="h-2.5 flex-1 rounded-sm bg-base-800">
+                        <div
+                          className="h-2.5 rounded-r-sm bg-accent"
+                          style={{ width: `${Math.max(4, (m.count / maxMuscleCount) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="w-5 shrink-0 text-right text-xs font-medium text-gray-300">{m.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="mt-4 px-4">
             <div className="mb-2 flex items-center justify-between">
