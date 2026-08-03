@@ -5,7 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
 import type { Run, Workout } from "@/lib/types";
-import { formatDateTime, formatDuration, formatPace } from "@/lib/format";
+import { formatDateTime, formatDuration, formatPace, localDateKey } from "@/lib/format";
 
 const QUICK_LOG_CHIPS: { label: string; prefill: string }[] = [
   { label: "Chest Day", prefill: "Chest day: " },
@@ -19,7 +19,7 @@ const QUICK_LOG_CHIPS: { label: string; prefill: string }[] = [
 ];
 
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDateKey(new Date());
 }
 
 type RecentEntry = { kind: "workout"; item: Workout } | { kind: "run"; item: Run };

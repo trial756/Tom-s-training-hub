@@ -6,7 +6,7 @@ import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
 import UndoToast from "@/components/UndoToast";
 import type { Favorite, Meal } from "@/lib/types";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, localDateKey } from "@/lib/format";
 import { AUTO_FAVORITE_THRESHOLD, normalizeMealKey } from "@/lib/mealFavorites";
 
 const MEAL_TYPE_COLORS: Record<string, string> = {
@@ -17,15 +17,13 @@ const MEAL_TYPE_COLORS: Record<string, string> = {
 };
 
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDateKey(new Date());
 }
 
 // Local-date comparison (not toISOString() slicing) so "today" follows the
 // device's calendar day rather than rolling over at UTC midnight.
 function isToday(iso: string): boolean {
-  const d = new Date(iso);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  return localDateKey(new Date(iso)) === localDateKey(new Date());
 }
 
 interface PendingDelete {

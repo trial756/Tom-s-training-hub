@@ -6,7 +6,7 @@ import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
 import type { Run } from "@/lib/types";
 import { RUN_TYPES } from "@/lib/types";
-import { formatDateTime, formatDuration, formatPace } from "@/lib/format";
+import { formatDateTime, formatDuration, formatPace, localDateKey } from "@/lib/format";
 import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
 
 const RUN_TYPE_COLORS: Record<string, string> = {
@@ -39,7 +39,7 @@ function paceColorClass(paceSecondsPerMile: number | null | undefined): string {
 }
 
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDateKey(new Date());
 }
 
 // Accepts "H:MM:SS", "MM:SS", or a bare number of seconds/minutes.
