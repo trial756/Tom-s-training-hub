@@ -93,4 +93,8 @@ export interface Favorite {
   name: string;
   raw_text: string;
   data: Record<string, unknown>;
+  key: string | null;
+  count: number;
+  manual: boolean;
+  updated_at: string;
 }
