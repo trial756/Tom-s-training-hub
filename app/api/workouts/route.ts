@@ -28,14 +28,15 @@ function summarizeExercises(exercises: Exercise[]): string {
 async function buildWorkoutHistoryContext(): Promise<string> {
   const { data } = await supabaseAdmin()
     .from("workouts")
-    .select("logged_at, exercises")
+    .select("logged_at, exercises, muscle_groups")
     .order("logged_at", { ascending: false })
-    .limit(15);
+    .limit(10);
 
   return (data ?? [])
     .map((w) => {
       const date = new Date(w.logged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-      return `${date} — ${summarizeExercises(w.exercises ?? [])}`;
+      const groups = (w.muscle_groups ?? []).length ? ` [${(w.muscle_groups ?? []).join(", ")}]` : "";
+      return `${date}${groups} — ${summarizeExercises(w.exercises ?? [])}`;
     })
     .join("\n");
 }
@@ -61,6 +62,12 @@ export async function POST(req: NextRequest) {
         coaching_feedback: parsed.coaching_feedback,
         vs_last_time: parsed.vs_last_time,
         adjustments: parsed.adjustments,
+        type: parsed.type,
+        muscle_groups: parsed.muscle_groups,
+        intensity: parsed.intensity,
+        calories_burned_est: parsed.calories_burned_est,
+        summary: parsed.summary,
+        weekly_note: parsed.weekly_note,
         logged_at: body.logged_at ?? new Date().toISOString(),
       })
       .select()

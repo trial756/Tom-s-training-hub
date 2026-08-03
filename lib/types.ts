@@ -60,6 +60,14 @@ export interface Run {
   weekly_note: string | null;
 }
 
+export interface MealItem {
+  name: string;
+  calories_est: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+}
+
 export interface Meal {
   id: string;
   created_at: string;
@@ -70,7 +78,7 @@ export interface Meal {
   protein_g: number | null;
   carbs_g: number | null;
   fat_g: number | null;
-  items: string[];
+  items: MealItem[];
   notes: string | null;
   coaching_feedback: string | null;
   summary: string | null;

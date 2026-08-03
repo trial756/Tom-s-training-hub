@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
         items: parsed.items,
         notes: parsed.notes,
         coaching_feedback: parsed.coaching_feedback,
+        summary: parsed.summary,
         logged_at: body.logged_at ?? new Date().toISOString(),
       })
       .select()

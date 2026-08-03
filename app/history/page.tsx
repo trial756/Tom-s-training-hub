@@ -190,7 +190,7 @@ function HistoryCard({
       )}
       {kind === "meal" && (
         <p className="mt-1 text-sm text-gray-300">
-          {item.items.join(", ") || item.raw_text} {item.calories ? `· ${item.calories} cal` : ""}
+          {item.items.map((i) => i.name).join(", ") || item.raw_text} {item.calories ? `· ${item.calories} cal` : ""}
         </p>
       )}
     </div>

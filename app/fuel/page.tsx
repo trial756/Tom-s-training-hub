@@ -67,7 +67,7 @@ export default function FuelPage() {
     if (!lastSaved) return;
     setSavingFavorite(true);
     try {
-      const name = window.prompt("Name this favorite:", lastSaved.items[0] ?? lastSaved.meal_type ?? "Meal");
+      const name = window.prompt("Name this favorite:", lastSaved.items[0]?.name ?? lastSaved.meal_type ?? "Meal");
       if (!name) return;
       await fetch("/api/favorites", {
         method: "POST",
@@ -129,7 +129,7 @@ export default function FuelPage() {
                 {favoriteSaved ? "★ Saved" : "☆ Save as favorite"}
               </button>
             </div>
-            <p className="text-sm text-gray-300">{lastSaved.items.join(", ")}</p>
+            <p className="text-sm text-gray-300">{lastSaved.items.map((i) => i.name).join(", ")}</p>
             <div className="mt-3 grid grid-cols-4 gap-2 text-center">
               <div>
                 <p className="text-base font-bold text-white">{lastSaved.calories ?? "—"}</p>
@@ -169,7 +169,7 @@ export default function FuelPage() {
                   </span>
                   <span className="text-xs text-gray-500">{formatDateTime(m.logged_at)}</span>
                 </div>
-                <p className="mt-1 text-sm text-gray-300">{m.items.join(", ") || m.raw_text}</p>
+                <p className="mt-1 text-sm text-gray-300">{m.items.map((i) => i.name).join(", ") || m.raw_text}</p>
                 <p className="mt-1 text-xs text-gray-500">{m.calories ?? "—"} cal</p>
               </div>
             ))}

@@ -40,7 +40,7 @@ function composeSummary(input: StructuredRunInput): string {
 async function buildRunHistoryContext(): Promise<string> {
   const { data } = await supabaseAdmin()
     .from("runs")
-    .select("logged_at, run_type, distance_miles, duration_seconds, pace_seconds_per_mile, avg_hr, elev_gain_ft")
+    .select("logged_at, run_type, distance_miles, duration_seconds, pace_seconds_per_mile, avg_hr, elev_gain_ft, feel")
     .order("logged_at", { ascending: false })
     .limit(15);
 
@@ -53,6 +53,7 @@ async function buildRunHistoryContext(): Promise<string> {
       if (r.pace_seconds_per_mile != null) bits.push(`(${formatPace(r.pace_seconds_per_mile)})`);
       if (r.avg_hr != null) bits.push(`avg HR ${r.avg_hr}`);
       if (r.elev_gain_ft != null) bits.push(`+${r.elev_gain_ft}ft`);
+      if (r.feel) bits.push(`felt ${r.feel}`);
       return `${date} — ${bits.join(" ")}`;
     })
     .join("\n");
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest) {
       humidity_pct: toNullableNumber(body.humidity_pct),
       surface: typeof body.surface === "string" && body.surface.trim() ? body.surface.trim() : null,
       notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null,
+      feel: typeof body.feel === "string" && body.feel.trim() ? body.feel.trim() : null,
     };
 
     const historyContext = await buildRunHistoryContext();
@@ -112,9 +114,13 @@ export async function POST(req: NextRequest) {
         surface: structured.surface,
         run_type: structured.run_type,
         notes: structured.notes,
+        feel: structured.feel,
         coaching_feedback: coaching.coaching_feedback,
         vs_last_time: coaching.vs_last_time,
         adjustments: coaching.adjustments,
+        pace_note: coaching.pace_note,
+        summary: coaching.summary,
+        weekly_note: coaching.weekly_note,
         logged_at: body.logged_at ?? new Date().toISOString(),
       })
       .select()
