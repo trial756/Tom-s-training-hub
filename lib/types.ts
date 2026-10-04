@@ -31,6 +31,37 @@ export interface Workout {
 export const RUN_TYPES = ["Easy", "Long", "Tempo", "Marathon Pace", "Interval", "Race", "Other"] as const;
 export type RunType = (typeof RUN_TYPES)[number];
 
+// ── Interval sessions ──────────────────────────────────────────────────
+// Two ways to log the different paces run in one interval session:
+// "quick" captures one pace per effort type; "detailed" captures each
+// repeat set, so ladders and mixed sessions (4×800 then 4×400) survive.
+
+export type IntervalMode = "quick" | "detailed";
+
+export interface IntervalSegment {
+  distance_miles: number | null;
+  pace_seconds_per_mile: number | null;
+}
+
+export interface IntervalSet {
+  reps: number | null;
+  distance_value: number | null; // as entered, in distance_unit
+  distance_unit: "m" | "mi";
+  rep_seconds: number | null; // time per single rep
+  recovery_seconds: number | null; // recovery between reps
+}
+
+export interface RunIntervals {
+  mode: IntervalMode;
+  warmup: IntervalSegment | null;
+  cooldown: IntervalSegment | null;
+  // quick mode only
+  work_pace_seconds_per_mile: number | null;
+  recovery_pace_seconds_per_mile: number | null;
+  // detailed mode only
+  sets: IntervalSet[];
+}
+
 export interface Run {
   id: string;
   created_at: string;
@@ -58,6 +89,7 @@ export interface Run {
   pace_note: string | null;
   summary: string | null;
   weekly_note: string | null;
+  intervals: RunIntervals | null;
 }
 
 export interface MealItem {

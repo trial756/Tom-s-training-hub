@@ -7,6 +7,7 @@ import CoachingNote from "@/components/CoachingNote";
 import UndoToast from "@/components/UndoToast";
 import type { Favorite, Meal, Run, Workout } from "@/lib/types";
 import { formatDateTime, formatDuration, formatPace, summarizeExerciseNames } from "@/lib/format";
+import { describeIntervals } from "@/lib/intervals";
 
 type Filter = "all" | "workouts" | "runs" | "meals" | "favorites";
 type WorkoutType = "strength" | "cardio" | "hiit" | "flexibility" | "run" | "other";
@@ -353,13 +354,20 @@ function HistoryCard({
           )}
 
           {kind === "run" && (
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
-              {item.avg_hr && <span>Avg HR {item.avg_hr}</span>}
-              {item.cadence_spm && <span>Cadence {item.cadence_spm} spm</span>}
-              {item.surface && <span className="capitalize">{item.surface}</span>}
-              {item.shoes && <span>{item.shoes}</span>}
-              {item.pace_note && <span>{item.pace_note}</span>}
-            </div>
+            <>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+                {item.avg_hr && <span>Avg HR {item.avg_hr}</span>}
+                {item.cadence_spm && <span>Cadence {item.cadence_spm} spm</span>}
+                {item.surface && <span className="capitalize">{item.surface}</span>}
+                {item.shoes && <span>{item.shoes}</span>}
+                {item.pace_note && <span>{item.pace_note}</span>}
+              </div>
+              {item.intervals && (
+                <p className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-2 text-xs text-gray-300">
+                  {describeIntervals(item.intervals)}
+                </p>
+              )}
+            </>
           )}
 
           {kind === "meal" && item.items.length > 0 && (

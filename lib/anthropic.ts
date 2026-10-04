@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { formatDuration, formatPace } from "@/lib/format";
+import { describeIntervals } from "@/lib/intervals";
+import type { RunIntervals } from "@/lib/types";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -139,7 +141,13 @@ const workoutSchema = {
       items: {
         type: "object",
         properties: {
-          name: { type: "string", description: "Exercise name, normalized (e.g. 'Bench Press')." },
+          name: {
+            type: "string",
+            description:
+              "Exercise name in canonical Title Case, singular (e.g. 'Incline Barbell Bench Press', " +
+              "'EZ-Bar Skull Crusher'). If the same movement appears in the workout history provided, reuse that " +
+              "exact spelling — consistent names are what let progress on a lift be tracked over time.",
+          },
           sets: {
             type: "array",
             items: {
@@ -256,6 +264,7 @@ export interface StructuredRunInput {
   surface: string | null;
   notes: string | null;
   feel: string | null;
+  intervals: RunIntervals | null;
 }
 
 export interface RunCoachingResult {
@@ -289,8 +298,9 @@ const runCoachingSchema = {
       description:
         "One sentence assessing today's average pace relative to the 8:01/mi marathon goal pace, appropriate to " +
         "the run type — e.g. easy/long runs should be slower than goal pace by design, that's correct pacing, not " +
-        "a problem; tempo/marathon-pace/interval runs should be judged against their own target zones. Null if no " +
-        "pace was recorded.",
+        "a problem; tempo/marathon-pace/interval runs should be judged against their own target zones. If an " +
+        "interval breakdown is provided, judge the work/rep paces rather than the session average (which is " +
+        "blended with recovery and warmup and means little on its own). Null if no pace was recorded.",
     },
     summary: { type: "string", description: "A short one-line summary for list views, e.g. '5mi Tempo, 7:00/mi avg'." },
     vs_last_time: vsLastTimeProperty,
@@ -321,6 +331,8 @@ function describeRun(run: StructuredRunInput): string {
   if (run.humidity_pct != null) parts.push(`Humidity: ${run.humidity_pct}%`);
   if (run.surface) parts.push(`Surface: ${run.surface}`);
   if (run.feel) parts.push(`Feel: ${run.feel}`);
+  const intervalDetail = describeIntervals(run.intervals);
+  if (intervalDetail) parts.push(`Interval breakdown: ${intervalDetail}`);
   if (run.notes) parts.push(`Notes: ${run.notes}`);
   return parts.join("\n");
 }
@@ -342,7 +354,11 @@ export async function generateRunCoaching(run: StructuredRunInput, historyContex
       "provided, and a note on pace relative to goal pace where applicable. You'll also be given a list of the " +
       "athlete's recent past runs (most recent first) — use it to find the most relevant prior run (same run type " +
       "is the strongest match) and write a 'vs last time' comparison grounded in specific numbers from both, plus " +
-      "concrete adjustments for next time.\n\n" + todayContext(),
+      "concrete adjustments for next time.\n\n" +
+      "If an interval breakdown is present, coach the session on its own terms: comment on rep pace consistency " +
+      "across the sets, whether the recovery was proportionate to the work, and how the work pace sits relative " +
+      "to the athlete's threshold and goal marathon pace. Not every field is filled in on every run — work with " +
+      "what's provided and never ask for or complain about missing data.\n\n" + todayContext(),
     userText:
       `Today's run:\n${describeRun(run)}\n\n` +
       `Recent run history for comparison (most recent first):\n${historyContext || "No prior runs logged yet."}`,

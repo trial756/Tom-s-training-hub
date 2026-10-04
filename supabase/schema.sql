@@ -69,6 +69,11 @@ alter table runs add column if not exists shoes text;
 alter table runs add column if not exists pace_note text; -- pace vs. goal pace commentary
 alter table runs add column if not exists summary text; -- one-line AI summary for list views
 alter table runs add column if not exists weekly_note text;
+-- Interval session detail. Null for non-interval runs. Shape:
+-- {mode: 'quick'|'detailed', warmup/cooldown: {distance_miles, pace_seconds_per_mile},
+--  work_pace_seconds_per_mile, recovery_pace_seconds_per_mile,  -- quick mode
+--  sets: [{reps, distance_value, distance_unit, rep_seconds, recovery_seconds}]} -- detailed mode
+alter table runs add column if not exists intervals jsonb;
 
 create index if not exists runs_logged_at_idx on runs (logged_at desc);
 

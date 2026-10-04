@@ -4,10 +4,17 @@ import { useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
-import type { Run } from "@/lib/types";
+import type { IntervalSet, Run, RunIntervals } from "@/lib/types";
 import { RUN_TYPES } from "@/lib/types";
 import { formatDateTime, formatDuration, formatPace, localDateKey } from "@/lib/format";
 import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
+import {
+  describeIntervals,
+  emptyIntervalSet,
+  emptyIntervals,
+  hasIntervalData,
+  setRepPaceSeconds,
+} from "@/lib/intervals";
 
 const RUN_TYPE_COLORS: Record<string, string> = {
   Easy: "bg-run/20 text-run",
@@ -104,6 +111,7 @@ export default function RunsPage() {
   const [date, setDate] = useState(todayISO());
   const [runType, setRunType] = useState<string>("");
   const [feel, setFeel] = useState<string>("");
+  const [intervals, setIntervals] = useState<RunIntervals>(emptyIntervals);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,10 +143,6 @@ export default function RunsPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!runType) {
-      setError("Pick a run type.");
-      return;
-    }
     setSubmitting(true);
     setError(null);
     setFavoriteSaved(false);
@@ -147,7 +151,7 @@ export default function RunsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          run_type: runType,
+          run_type: runType || null,
           logged_at: new Date(`${date}T12:00:00`).toISOString(),
           distance_miles: form.distance ? Number(form.distance) : null,
           duration_seconds: parseClock(digitsToClock(form.duration)),
@@ -164,6 +168,7 @@ export default function RunsPage() {
           shoes: form.shoes || null,
           notes: form.notes || null,
           feel: feel || null,
+          intervals: hasIntervalData(intervals) ? intervals : null,
         }),
       });
       const json = await res.json();
@@ -172,6 +177,7 @@ export default function RunsPage() {
       setForm(EMPTY_FORM);
       setRunType("");
       setFeel("");
+      setIntervals(emptyIntervals());
       setDate(todayISO());
       loadRecent();
     } catch (err) {
@@ -186,6 +192,45 @@ export default function RunsPage() {
     if (!last) return;
     setRunType(last.run_type ?? "");
     setForm((prev) => ({ ...prev, surface: last.surface ?? "", shoes: last.shoes ?? "" }));
+  }
+
+  // Nothing on this form is required — not even the run type. The only bar
+  // for logging is that *something* was entered, so an accidental tap on an
+  // empty form doesn't create a blank run.
+  const hasAnyInput =
+    Object.values(form).some((v) => v.trim() !== "") || !!runType || !!feel || hasIntervalData(intervals);
+
+  function updateIntervals(patch: Partial<RunIntervals>) {
+    setIntervals((prev) => ({ ...prev, ...patch }));
+  }
+
+  function updateSegment(which: "warmup" | "cooldown", patch: Partial<{ distance_miles: number | null; pace_seconds_per_mile: number | null }>) {
+    setIntervals((prev) => ({
+      ...prev,
+      [which]: {
+        distance_miles: prev[which]?.distance_miles ?? null,
+        pace_seconds_per_mile: prev[which]?.pace_seconds_per_mile ?? null,
+        ...patch,
+      },
+    }));
+  }
+
+  function updateSet(index: number, patch: Partial<IntervalSet>) {
+    setIntervals((prev) => ({
+      ...prev,
+      sets: prev.sets.map((s, i) => (i === index ? { ...s, ...patch } : s)),
+    }));
+  }
+
+  function addSet() {
+    setIntervals((prev) => ({ ...prev, sets: [...prev.sets, emptyIntervalSet()] }));
+  }
+
+  function removeSet(index: number) {
+    setIntervals((prev) => ({
+      ...prev,
+      sets: prev.sets.length === 1 ? [emptyIntervalSet()] : prev.sets.filter((_, i) => i !== index),
+    }));
   }
 
   const filteredRecent = recent.filter((r) => {
@@ -239,7 +284,7 @@ export default function RunsPage() {
 
   return (
     <div>
-      <PageHeader title="Log a Run" subtitle="Pick a type, fill in what you've got." />
+      <PageHeader title="Log a Run" subtitle="Fill in whatever you've got — nothing is required." />
 
       <form onSubmit={handleSubmit} className="px-4">
         <div className="mb-4 flex items-end justify-between gap-3">
@@ -301,6 +346,23 @@ export default function RunsPage() {
           ))}
         </div>
 
+        {runType === "Interval" && (
+          <IntervalEditor
+            intervals={intervals}
+            disabled={submitting}
+            onModeChange={(mode) => updateIntervals({ mode })}
+            onSegmentChange={updateSegment}
+            onQuickPaceChange={(which, seconds) =>
+              updateIntervals(
+                which === "work" ? { work_pace_seconds_per_mile: seconds } : { recovery_pace_seconds_per_mile: seconds }
+              )
+            }
+            onSetChange={updateSet}
+            onAddSet={addSet}
+            onRemoveSet={removeSet}
+          />
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <Field label="Distance (mi)" value={form.distance} onChange={(v) => updateField("distance", v)} placeholder="6.2" disabled={submitting} />
           <ClockField label="Duration (h:mm:ss)" digits={form.duration} onChange={(v) => updateField("duration", v)} placeholder="0:54:10" disabled={submitting} />
@@ -326,7 +388,7 @@ export default function RunsPage() {
           disabled={submitting}
         />
 
-        <button type="submit" className="btn-primary mt-4 w-full" disabled={submitting || !runType}>
+        <button type="submit" className="btn-primary mt-4 w-full" disabled={submitting || !hasAnyInput}>
           {submitting ? "Getting coaching feedback…" : "Log Run"}
         </button>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
@@ -379,6 +441,11 @@ export default function RunsPage() {
               {lastSaved.shoes && <span>{lastSaved.shoes}</span>}
               {lastSaved.feel && <span>{FEEL_CHIPS.find((f) => f.label === lastSaved.feel)?.emoji} {lastSaved.feel}</span>}
             </div>
+            {lastSaved.intervals && (
+              <p className="mt-2 rounded-lg border border-purple-500/20 bg-purple-500/5 p-2 text-xs text-gray-300">
+                {describeIntervals(lastSaved.intervals)}
+              </p>
+            )}
             {lastSaved.pace_note && <p className="mt-2 text-center text-xs text-gray-500">{lastSaved.pace_note}</p>}
             <CoachingNote
               feedback={lastSaved.coaching_feedback}
@@ -490,6 +557,295 @@ function ClockField({
         onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
         disabled={disabled}
       />
+    </div>
+  );
+}
+
+// ── Interval session editor ─────────────────────────────────────────────
+// Shown only for Interval runs. Two modes, because an interval session is
+// run at several different paces and how much detail you want to capture
+// varies: "Quick" records one pace per effort type, "Detailed" records each
+// repeat set so ladders and mixed sessions survive intact.
+
+function secondsToDigits(total: number | null): string {
+  if (total == null || total <= 0) return "";
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = Math.round(total % 60);
+  if (h > 0) return `${h}${String(m).padStart(2, "0")}${String(s).padStart(2, "0")}`;
+  if (m > 0) return `${m}${String(s).padStart(2, "0")}`;
+  return String(s);
+}
+
+// Masked clock input that talks in seconds instead of raw digits. Internal
+// digit state is seeded from the incoming value on mount, so switching run
+// type away and back doesn't blank out what's already entered.
+function SecondsClockField({
+  label,
+  seconds,
+  onChange,
+  placeholder,
+  disabled,
+  compact,
+}: {
+  label: string;
+  seconds: number | null;
+  onChange: (seconds: number | null) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  compact?: boolean;
+}) {
+  const [digits, setDigits] = useState(() => secondsToDigits(seconds));
+
+  return (
+    <div>
+      <label className={`mb-1 block font-semibold uppercase tracking-wide text-gray-500 ${compact ? "text-[10px]" : "text-xs"}`}>
+        {label}
+      </label>
+      <input
+        type="text"
+        inputMode="numeric"
+        className="input-field"
+        placeholder={placeholder}
+        value={digitsToClock(digits)}
+        onChange={(e) => {
+          const next = e.target.value.replace(/\D/g, "");
+          setDigits(next);
+          onChange(parseClock(digitsToClock(next)));
+        }}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+function NumField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  compact,
+}: {
+  label: string;
+  value: number | null;
+  onChange: (value: number | null) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  compact?: boolean;
+}) {
+  const [text, setText] = useState(() => (value == null ? "" : String(value)));
+
+  return (
+    <div>
+      <label className={`mb-1 block font-semibold uppercase tracking-wide text-gray-500 ${compact ? "text-[10px]" : "text-xs"}`}>
+        {label}
+      </label>
+      <input
+        type="text"
+        inputMode="decimal"
+        className="input-field"
+        placeholder={placeholder}
+        value={text}
+        onChange={(e) => {
+          const next = e.target.value;
+          setText(next);
+          const n = Number(next);
+          onChange(next.trim() === "" || !Number.isFinite(n) ? null : n);
+        }}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+function IntervalEditor({
+  intervals,
+  disabled,
+  onModeChange,
+  onSegmentChange,
+  onQuickPaceChange,
+  onSetChange,
+  onAddSet,
+  onRemoveSet,
+}: {
+  intervals: RunIntervals;
+  disabled?: boolean;
+  onModeChange: (mode: RunIntervals["mode"]) => void;
+  onSegmentChange: (
+    which: "warmup" | "cooldown",
+    patch: Partial<{ distance_miles: number | null; pace_seconds_per_mile: number | null }>
+  ) => void;
+  onQuickPaceChange: (which: "work" | "recovery", seconds: number | null) => void;
+  onSetChange: (index: number, patch: Partial<IntervalSet>) => void;
+  onAddSet: () => void;
+  onRemoveSet: (index: number) => void;
+}) {
+  return (
+    <div className="mb-4 rounded-2xl border border-purple-500/30 bg-purple-500/5 p-3">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-purple-300">Intervals</span>
+        <div className="flex gap-1 rounded-lg bg-base-800 p-0.5">
+          {(["quick", "detailed"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onModeChange(m)}
+              disabled={disabled}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+                intervals.mode === m ? "bg-accent text-base-950" : "text-gray-400"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <NumField
+          label="Warmup (mi)"
+          compact
+          value={intervals.warmup?.distance_miles ?? null}
+          onChange={(v) => onSegmentChange("warmup", { distance_miles: v })}
+          placeholder="1.5"
+          disabled={disabled}
+        />
+        <SecondsClockField
+          label="Warmup pace"
+          compact
+          seconds={intervals.warmup?.pace_seconds_per_mile ?? null}
+          onChange={(v) => onSegmentChange("warmup", { pace_seconds_per_mile: v })}
+          placeholder="9:40"
+          disabled={disabled}
+        />
+      </div>
+
+      {intervals.mode === "quick" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <SecondsClockField
+            label="Work pace"
+            compact
+            seconds={intervals.work_pace_seconds_per_mile}
+            onChange={(v) => onQuickPaceChange("work", v)}
+            placeholder="6:12"
+            disabled={disabled}
+          />
+          <SecondsClockField
+            label="Recovery pace"
+            compact
+            seconds={intervals.recovery_pace_seconds_per_mile}
+            onChange={(v) => onQuickPaceChange("recovery", v)}
+            placeholder="10:30"
+            disabled={disabled}
+          />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {intervals.sets.map((set, i) => {
+            const pace = setRepPaceSeconds(set);
+            return (
+              <div key={i} className="rounded-xl border border-base-700 bg-base-900 p-2.5">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Set {i + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => onRemoveSet(i)}
+                    disabled={disabled}
+                    className="text-xs text-gray-600 active:text-danger"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <NumField
+                    label="Reps"
+                    compact
+                    value={set.reps}
+                    onChange={(v) => onSetChange(i, { reps: v })}
+                    placeholder="6"
+                    disabled={disabled}
+                  />
+                  <NumField
+                    label="Distance"
+                    compact
+                    value={set.distance_value}
+                    onChange={(v) => onSetChange(i, { distance_value: v })}
+                    placeholder="800"
+                    disabled={disabled}
+                  />
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Unit</label>
+                    <div className="flex gap-1 rounded-xl bg-base-800 p-0.5">
+                      {(["m", "mi"] as const).map((u) => (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => onSetChange(i, { distance_unit: u })}
+                          disabled={disabled}
+                          className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
+                            set.distance_unit === u ? "bg-accent text-base-950" : "text-gray-400"
+                          }`}
+                        >
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <SecondsClockField
+                    label="Time / rep"
+                    compact
+                    seconds={set.rep_seconds}
+                    onChange={(v) => onSetChange(i, { rep_seconds: v })}
+                    placeholder="3:05"
+                    disabled={disabled}
+                  />
+                  <SecondsClockField
+                    label="Recovery"
+                    compact
+                    seconds={set.recovery_seconds}
+                    onChange={(v) => onSetChange(i, { recovery_seconds: v })}
+                    placeholder="2:00"
+                    disabled={disabled}
+                  />
+                </div>
+                {pace && (
+                  <p className={`mt-2 text-xs font-medium ${paceColorClass(pace)}`}>→ {formatPace(pace)} per rep</p>
+                )}
+              </div>
+            );
+          })}
+          <button
+            type="button"
+            onClick={onAddSet}
+            disabled={disabled}
+            className="w-full rounded-xl border border-dashed border-base-600 py-2 text-xs font-medium text-gray-400 active:border-accent active:text-accent"
+          >
+            + Add set
+          </button>
+        </div>
+      )}
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <NumField
+          label="Cooldown (mi)"
+          compact
+          value={intervals.cooldown?.distance_miles ?? null}
+          onChange={(v) => onSegmentChange("cooldown", { distance_miles: v })}
+          placeholder="1.0"
+          disabled={disabled}
+        />
+        <SecondsClockField
+          label="Cooldown pace"
+          compact
+          seconds={intervals.cooldown?.pace_seconds_per_mile ?? null}
+          onChange={(v) => onSegmentChange("cooldown", { pace_seconds_per_mile: v })}
+          placeholder="10:05"
+          disabled={disabled}
+        />
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateRunCoaching, type StructuredRunInput } from "@/lib/anthropic";
 import { formatDuration, formatPace } from "@/lib/format";
+import { sanitizeIntervals } from "@/lib/intervals";
 import { RUN_TYPES } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -63,10 +64,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const run_type = typeof body.run_type === "string" ? body.run_type : "";
-    if (!RUN_TYPES.includes(run_type as (typeof RUN_TYPES)[number])) {
-      return NextResponse.json({ error: `Missing or invalid 'run_type'. Must be one of: ${RUN_TYPES.join(", ")}` }, { status: 400 });
-    }
+    // Nothing on the run form is required, run type included — an unset or
+    // unrecognized type falls back to "Other" rather than rejecting the log.
+    const submittedType = typeof body.run_type === "string" ? body.run_type.trim() : "";
+    const run_type = RUN_TYPES.includes(submittedType as (typeof RUN_TYPES)[number]) ? submittedType : "Other";
 
     const distance_miles = toNullableNumber(body.distance_miles);
     const duration_seconds = toNullableNumber(body.duration_seconds);
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
       surface: typeof body.surface === "string" && body.surface.trim() ? body.surface.trim() : null,
       notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null,
       feel: typeof body.feel === "string" && body.feel.trim() ? body.feel.trim() : null,
+      intervals: sanitizeIntervals(body.intervals),
     };
     const shoes = typeof body.shoes === "string" && body.shoes.trim() ? body.shoes.trim() : null;
 
@@ -116,6 +118,7 @@ export async function POST(req: NextRequest) {
         run_type: structured.run_type,
         notes: structured.notes,
         feel: structured.feel,
+        intervals: structured.intervals,
         shoes,
         coaching_feedback: coaching.coaching_feedback,
         vs_last_time: coaching.vs_last_time,
