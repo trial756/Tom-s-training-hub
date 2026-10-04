@@ -118,6 +118,8 @@ export default function RunsPage() {
   const [lastSaved, setLastSaved] = useState<Run | null>(null);
   const [recent, setRecent] = useState<Run[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(true);
+  const [shoeOptions, setShoeOptions] = useState<{ shoes: string; miles: number }[]>([]);
+  const [addingShoe, setAddingShoe] = useState(false);
   const [savingFavorite, setSavingFavorite] = useState(false);
   const [favoriteSaved, setFavoriteSaved] = useState(false);
   const [search, setSearch] = useState("");
@@ -129,9 +131,12 @@ export default function RunsPage() {
   async function loadRecent() {
     setLoadingRecent(true);
     try {
-      const res = await fetch("/api/runs?limit=8");
-      const json = await res.json();
-      setRecent(json.runs ?? []);
+      const [runsJson, shoesJson] = await Promise.all([
+        fetch("/api/runs?limit=8").then((res) => res.json()),
+        fetch("/api/runs/shoes").then((res) => res.json()),
+      ]);
+      setRecent(runsJson.runs ?? []);
+      setShoeOptions(shoesJson.shoes ?? []);
     } finally {
       setLoadingRecent(false);
     }
@@ -178,6 +183,7 @@ export default function RunsPage() {
       setRunType("");
       setFeel("");
       setIntervals(emptyIntervals());
+      setAddingShoe(false);
       setDate(todayISO());
       loadRecent();
     } catch (err) {
@@ -376,7 +382,21 @@ export default function RunsPage() {
           <Field label="Temp (°F)" value={form.temp} onChange={(v) => updateField("temp", v)} placeholder="72" disabled={submitting} />
           <Field label="Humidity (%)" value={form.humidity} onChange={(v) => updateField("humidity", v)} placeholder="55" disabled={submitting} />
           <Field label="Surface" value={form.surface} onChange={(v) => updateField("surface", v)} placeholder="road, trail…" disabled={submitting} type="text" />
-          <Field label="Shoes" value={form.shoes} onChange={(v) => updateField("shoes", v)} placeholder="Brooks Ghost 15" disabled={submitting} type="text" />
+          <ShoeField
+            value={form.shoes}
+            options={shoeOptions}
+            addingNew={addingShoe}
+            onSelect={(v) => {
+              setAddingShoe(false);
+              updateField("shoes", v);
+            }}
+            onAddNew={() => {
+              setAddingShoe(true);
+              updateField("shoes", "");
+            }}
+            onTypeNew={(v) => updateField("shoes", v)}
+            disabled={submitting}
+          />
         </div>
 
         <label className="mb-1 mt-4 block text-xs font-semibold uppercase tracking-wide text-gray-500">Notes (optional)</label>
@@ -846,6 +866,79 @@ function IntervalEditor({
           disabled={disabled}
         />
       </div>
+    </div>
+  );
+}
+
+// Picking a previously-used pair rather than retyping it is what keeps one
+// pair from fragmenting into several spellings and splitting its mileage in
+// the Marathon tab's shoe tracker. Mileage rides along in the option text so
+// a pair nearing the ~350mi retirement mark is visible at the point of entry.
+function ShoeField({
+  value,
+  options,
+  addingNew,
+  onSelect,
+  onAddNew,
+  onTypeNew,
+  disabled,
+}: {
+  value: string;
+  options: { shoes: string; miles: number }[];
+  addingNew: boolean;
+  onSelect: (value: string) => void;
+  onAddNew: () => void;
+  onTypeNew: (value: string) => void;
+  disabled?: boolean;
+}) {
+  // An existing run being edited may carry a shoe that predates this list.
+  const known = options.some((o) => o.shoes === value);
+  const showNewInput = addingNew || (!!value && !known);
+
+  return (
+    // Full row — shoe names plus mileage don't fit a half-width field.
+    <div className="col-span-2">
+      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Shoes</label>
+      {showNewInput ? (
+        <div className="flex gap-1">
+          <input
+            type="text"
+            className="input-field"
+            placeholder="Brooks Ghost 15"
+            value={value}
+            onChange={(e) => onTypeNew(e.target.value)}
+            disabled={disabled}
+            autoFocus={addingNew}
+          />
+          {options.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onSelect("")}
+              disabled={disabled}
+              className="shrink-0 rounded-xl border border-base-600 bg-base-800 px-2 text-xs text-gray-400 active:text-accent"
+              aria-label="Back to shoe list"
+            >
+              ↩
+            </button>
+          )}
+        </div>
+      ) : (
+        <select
+          className="input-field"
+          value={value}
+          onChange={(e) => (e.target.value === "__new__" ? onAddNew() : onSelect(e.target.value))}
+          disabled={disabled}
+        >
+          <option value="">—</option>
+          {options.map((o) => (
+            <option key={o.shoes} value={o.shoes}>
+              {o.shoes}
+              {o.miles > 0 ? ` · ${o.miles} mi` : ""}
+            </option>
+          ))}
+          <option value="__new__">+ Add new shoe</option>
+        </select>
+      )}
     </div>
   );
 }
