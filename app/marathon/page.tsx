@@ -19,6 +19,8 @@ import {
 } from "@/lib/marathonPlan";
 import { formatPace, formatShortDate, localDateKey } from "@/lib/format";
 import type { Run } from "@/lib/types";
+import ChartFrame from "@/components/charts/ChartFrame";
+import LineChart from "@/components/charts/LineChart";
 
 const PHASE_COLORS: Record<PlanPhase, string> = {
   "Base Building": "bg-blue-500/20 text-blue-300",
@@ -55,6 +57,25 @@ export default function MarathonPage() {
       })
       .reduce((sum, r) => sum + (Number(r.distance_miles) || 0), 0);
   }, [runs, active]);
+
+  // Planned vs actual mileage across the block. Actual only runs through the
+  // current week — plotting zeroes for weeks that haven't happened yet would
+  // read as missed training rather than future training.
+  const planVsActual = useMemo(() => {
+    const milesByWeek = weeks.map((w) =>
+      runs
+        .filter((r) => {
+          const key = localDateKey(new Date(r.logged_at));
+          return key >= w.startDate && key <= w.endDate;
+        })
+        .reduce((sum, r) => sum + (Number(r.distance_miles) || 0), 0)
+    );
+    return weeks.map((w, i) => ({
+      week: w,
+      planned: w.weeklyMileage,
+      actual: active && w.weekNumber > active.weekNumber ? null : Math.round(milesByWeek[i] * 10) / 10,
+    }));
+  }, [weeks, runs, active]);
 
   const shoeMileage = useMemo(() => {
     const map = new Map<string, number>();
@@ -149,6 +170,50 @@ export default function MarathonPage() {
           </div>
         </div>
       )}
+
+      <div className="mt-6 px-4">
+        <ChartFrame
+          title="Planned vs Actual Mileage"
+          subtitle="Across the 27-week block"
+          series={[
+            { name: "Planned", color: "#6b6b6b" },
+            { name: "Actual", color: "#00e676" },
+          ]}
+          empty={loadingRuns}
+          emptyMessage="Loading…"
+          tableHead={["Wk", "Planned", "Actual"]}
+          tableRows={planVsActual.map((p) => [
+            p.week.weekNumber,
+            `${p.planned} mi`,
+            p.actual == null ? "—" : `${p.actual} mi`,
+          ])}
+        >
+          <LineChart
+            series={[
+              {
+                name: "Planned",
+                color: "#6b6b6b",
+                points: planVsActual.map((p) => ({
+                  x: p.week.weekNumber,
+                  y: p.planned,
+                  label: `Wk ${p.week.weekNumber} planned`,
+                })),
+              },
+              {
+                name: "Actual",
+                color: "#00e676",
+                points: planVsActual
+                  .filter((p) => p.actual != null)
+                  .map((p) => ({ x: p.week.weekNumber, y: p.actual as number, label: `Wk ${p.week.weekNumber} actual` })),
+              },
+            ]}
+            formatValue={(v) => `${v} mi`}
+            xLabels={planVsActual
+              .filter((p) => p.week.weekNumber % 6 === 1)
+              .map((p) => ({ x: p.week.weekNumber, label: `w${p.week.weekNumber}` }))}
+          />
+        </ChartFrame>
+      </div>
 
       <div className="mt-6 px-4">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Pace Targets</h2>

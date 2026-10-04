@@ -6,9 +6,30 @@ import PageHeader from "@/components/PageHeader";
 import StatTile from "@/components/StatTile";
 import Spinner from "@/components/Spinner";
 import { formatPace, formatMinutes } from "@/lib/format";
-import { RACE_DATE, GOAL_TIME } from "@/lib/marathonPlan";
+import { RACE_DATE, GOAL_TIME, GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
+import ChartFrame from "@/components/charts/ChartFrame";
+import BarChart from "@/components/charts/BarChart";
+import GroupedBarChart from "@/components/charts/GroupedBarChart";
+import LineChart from "@/components/charts/LineChart";
 
 type Range = "7day" | "month";
+
+// Validated against the dark chart surface for colorblind separation —
+// see the palette check in lib docs. Single-series charts keep the brand
+// accent instead, since one series carries no identity-by-color.
+const SERIES_AMBER = "#c98100";
+const SERIES_BLUE = "#4b9bd4";
+const SERIES_MAGENTA = "#c364b0";
+const LIFT_COLORS = [SERIES_BLUE, SERIES_AMBER, SERIES_MAGENTA];
+
+interface TrendsResponse {
+  trendWeeks: number;
+  weeklyMileage: { week: string; label: string; miles: number }[];
+  weeklyVolume: { week: string; label: string; volume: number }[];
+  runPaces: { dayIndex: number; label: string; pace_seconds_per_mile: number; run_type: string; distance_miles: number | null }[];
+  dailyFuel: { date: string; label: string; consumed: number; burned: number; protein_g: number }[];
+  topLifts: { name: string; points: { dayIndex: number; label: string; weight: number }[] }[];
+}
 
 interface StatsResponse {
   range: Range;
@@ -37,6 +58,7 @@ interface TrainingSummary {
 export default function StatsPage() {
   const [range, setRange] = useState<Range>("7day");
   const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [trends, setTrends] = useState<TrendsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,11 +83,15 @@ export default function StatsPage() {
   function loadStats(r: Range) {
     setLoading(true);
     setError(null);
-    fetch(`/api/stats?range=${r}`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.error) throw new Error(json.error);
-        setStats(json);
+    Promise.all([
+      fetch(`/api/stats?range=${r}`).then((res) => res.json()),
+      fetch(`/api/trends?range=${r}`).then((res) => res.json()),
+    ])
+      .then(([statsJson, trendsJson]) => {
+        if (statsJson.error) throw new Error(statsJson.error);
+        setStats(statsJson);
+        // Charts are secondary — a trends failure shouldn't blank the page.
+        setTrends(trendsJson.error ? null : trendsJson);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -220,6 +246,140 @@ export default function StatsPage() {
               </div>
             )}
           </div>
+
+          {trends && (
+            <div className="mt-6 space-y-3 px-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Running</h2>
+
+              <ChartFrame
+                title="Weekly Mileage"
+                subtitle={`Last ${trends.trendWeeks} weeks · Sun–Sat`}
+                empty={trends.weeklyMileage.every((w) => w.miles === 0)}
+                emptyMessage="No runs logged in the last 12 weeks."
+                tableHead={["Week of", "Miles"]}
+                tableRows={trends.weeklyMileage.map((w) => [w.label, w.miles])}
+              >
+                <BarChart
+                  data={trends.weeklyMileage.map((w) => ({
+                    label: w.label,
+                    value: w.miles,
+                    tooltip: `Week of ${w.label}: ${w.miles} mi`,
+                  }))}
+                  formatValue={(v) => `${v} mi`}
+                />
+              </ChartFrame>
+
+              <ChartFrame
+                title="Pace Trend"
+                subtitle="Each run · lower is faster"
+                empty={trends.runPaces.length === 0}
+                emptyMessage="No runs with a recorded pace yet."
+                tableHead={["Date", "Type", "Pace"]}
+                tableRows={trends.runPaces.map((p) => [p.label, p.run_type, formatPace(p.pace_seconds_per_mile)])}
+              >
+                <LineChart
+                  series={[
+                    {
+                      name: "Pace",
+                      color: "#2ec4b6",
+                      points: trends.runPaces.map((p) => ({
+                        x: p.dayIndex,
+                        y: p.pace_seconds_per_mile,
+                        label: `${p.label} ${p.run_type}`,
+                      })),
+                    },
+                  ]}
+                  formatValue={(v) => formatPace(v)}
+                  referenceValue={GOAL_PACE_SECONDS_PER_MILE}
+                  referenceLabel="8:01 goal"
+                />
+              </ChartFrame>
+
+              <h2 className="pt-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Fuel</h2>
+
+              <ChartFrame
+                title="Calories In vs Burned"
+                subtitle={range === "month" ? "Last 30 days" : "Last 7 days"}
+                series={[
+                  { name: "Consumed", color: SERIES_AMBER },
+                  { name: "Burned", color: SERIES_BLUE },
+                ]}
+                empty={trends.dailyFuel.every((d) => d.consumed === 0 && d.burned === 0)}
+                tableHead={["Day", "In", "Burned"]}
+                tableRows={trends.dailyFuel.map((d) => [d.label, d.consumed, d.burned])}
+              >
+                <GroupedBarChart
+                  data={trends.dailyFuel.map((d) => ({
+                    label: d.label,
+                    a: d.consumed,
+                    b: d.burned,
+                    tooltip: `${d.label}: ${d.consumed} in / ${d.burned} burned`,
+                  }))}
+                  colorA={SERIES_AMBER}
+                  colorB={SERIES_BLUE}
+                  formatValue={(v) => `${v} cal`}
+                />
+              </ChartFrame>
+
+              <ChartFrame
+                title="Protein"
+                subtitle={range === "month" ? "Last 30 days" : "Last 7 days"}
+                empty={trends.dailyFuel.every((d) => d.protein_g === 0)}
+                emptyMessage="No meals logged in this range."
+                tableHead={["Day", "Protein"]}
+                tableRows={trends.dailyFuel.map((d) => [d.label, `${d.protein_g}g`])}
+              >
+                <BarChart
+                  data={trends.dailyFuel.map((d) => ({
+                    label: d.label,
+                    value: d.protein_g,
+                    tooltip: `${d.label}: ${d.protein_g}g protein`,
+                  }))}
+                  color={SERIES_AMBER}
+                  formatValue={(v) => `${v}g`}
+                />
+              </ChartFrame>
+
+              <h2 className="pt-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Strength</h2>
+
+              <ChartFrame
+                title="Training Volume"
+                subtitle={`Last ${trends.trendWeeks} weeks · reps × weight`}
+                empty={trends.weeklyVolume.every((w) => w.volume === 0)}
+                emptyMessage="No weighted sets logged in the last 12 weeks."
+                tableHead={["Week of", "Volume (lb)"]}
+                tableRows={trends.weeklyVolume.map((w) => [w.label, w.volume.toLocaleString()])}
+              >
+                <BarChart
+                  data={trends.weeklyVolume.map((w) => ({
+                    label: w.label,
+                    value: w.volume,
+                    tooltip: `Week of ${w.label}: ${w.volume.toLocaleString()} lb`,
+                  }))}
+                  formatValue={(v) => `${Math.round(v / 1000)}k lb`}
+                />
+              </ChartFrame>
+
+              <ChartFrame
+                title="Top Sets"
+                subtitle="Heaviest set per session, most-logged lifts"
+                series={trends.topLifts.map((l, i) => ({ name: l.name, color: LIFT_COLORS[i] }))}
+                empty={trends.topLifts.length === 0}
+                emptyMessage="Log a lift across two or more sessions to see progression."
+                tableHead={["Lift", "Date", "Top set"]}
+                tableRows={trends.topLifts.flatMap((l) => l.points.map((p) => [l.name, p.label, `${p.weight} lb`]))}
+              >
+                <LineChart
+                  series={trends.topLifts.map((l, i) => ({
+                    name: l.name,
+                    color: LIFT_COLORS[i],
+                    points: l.points.map((p) => ({ x: p.dayIndex, y: p.weight, label: p.label })),
+                  }))}
+                  formatValue={(v) => `${v} lb`}
+                />
+              </ChartFrame>
+            </div>
+          )}
 
           <div className="mt-4 px-4">
             <div className="mb-2 flex items-center justify-between">

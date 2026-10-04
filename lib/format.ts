@@ -65,3 +65,34 @@ export function startOfLocalDay(d: Date): Date {
 export function localDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+/** Sunday that starts the training week containing `d` (weeks run Sun–Sat). */
+export function startOfWeekSunday(d: Date): Date {
+  const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  date.setDate(date.getDate() - date.getDay());
+  return date;
+}
+
+// Equipment words that get dropped when grouping lifts, because the AI
+// parser has historically logged the same movement both with and without
+// them ("Incline Barbell Bench Press" vs "Incline Bench Press"). Only words
+// that don't distinguish a genuinely different lift belong here — "dumbbell"
+// and "machine" must stay, since those are different movements.
+const GROUPING_STOPWORDS = new Set(["barbell"]);
+
+/**
+ * Collapses spelling variants of the same lift into one grouping key, so
+ * progress on a lift isn't split across near-identical names. Grouping only —
+ * display always uses the most common original spelling.
+ */
+export function normalizeExerciseName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter((w) => w && !GROUPING_STOPWORDS.has(w))
+    .map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w))
+    .join(" ");
+}

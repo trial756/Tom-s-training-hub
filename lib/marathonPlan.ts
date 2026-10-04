@@ -1,3 +1,6 @@
+// The Sunday-week rule lives in lib/format so there is one definition of it.
+import { startOfWeekSunday } from "@/lib/format";
+
 // Static 27-week marathon training plan.
 // Race day: Sunday, December 13, 2026 · Goal: 3:30:00 · Goal pace: 8:01 /mi
 
@@ -77,11 +80,6 @@ function fmtDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function startOfWeekSunday(d: Date): Date {
-  const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  date.setDate(date.getDate() - date.getDay());
-  return date;
-}
 
 export function buildMarathonPlan(): PlanWeek[] {
   const race = new Date(`${RACE_DATE}T00:00:00`);
