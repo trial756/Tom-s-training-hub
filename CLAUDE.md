@@ -33,11 +33,22 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 
 **favorites**: key (normalized text), text (display text), count (times logged), manual (bool — explicitly starred)
 
+**exercise_muscles**: key (normalized exercise name), display_name, primary_muscles[], secondary_muscles[], source ('seed' | 'ai'). Keyed by exercise rather than tagged per workout, so correcting a tag fixes every past and future session using that movement. The parser proposes tags for exercises it hasn't met; existing rows are never overwritten.
+
+**week_plans**: week_start (Sunday, PK), plan_week, phase, headline, sessions[] (what the week should contain), assignments{sessionId: date} (where each currently sits), context (the facts packet it was generated from)
+
 ---
 
 ## Tabs & Features
 
-### Stats (home tab — this is the default landing tab)
+### Today (home tab — this is the default landing tab)
+- **Week plan** (Sunday–Saturday): a day strip showing each day's state (done / off-script / missed / today / upcoming) and a card for the selected day — session title, why it's there, target muscle regions, and exercises with loads anchored to recent top sets. Movements with no history get a one-line form cue and a "new" tag.
+- Every day gets something; when a gym session isn't right the suggestion is active recovery (walk, mobility, accessory work) or an explicit rest day.
+- "Log this" opens the Log tab prefilled with the session; "Replan week" forces regeneration.
+- **Body Map**: front/back figure, 17 muscle regions, filled by a rolling 7-day window (toggleable to all-time). Gym load fills green, run load teal — running credits quads/hamstrings/glutes/calves, otherwise a marathoner's legs read as neglected. Tap a region for last-trained and set counts.
+- Stats (below the plan) — everything in the section that follows, with the trend charts in a snap-scrolling carousel.
+
+### Stats (now a section of the Today tab)
 - 7-day / Monthly toggle
 - Stat cards: Workouts, Runs, Cal Burned, Cal Consumed, Protein (g), Net Calories
 - Muscle Groups Hit — horizontal bar chart, frequency count by muscle group
@@ -132,6 +143,10 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 **summarizeTraining** (weekly/monthly review): headline + 3-4 sentence summary + wins[] + watchouts[] + next_week_focus. **Includes meal-logging coverage awareness**: computes how many distinct days in the range had ≥1 meal logged, tells the model this reflects logging habits not actual eating, and instructs it to never assume gaps mean "didn't eat" — if coverage is under 50%, gently flag inconsistent logging and encourage more consistent tracking (supportive, not preachy); say nothing if coverage is already good.
 
 ---
+
+**generateWeekPlan**: produces one training week's sessions from a context packet that is computed in code (marathon phase and target, miles so far, per-region staleness, inferred lift/run cadence, per-lift top-set anchors) — the model plans, it never infers history. Prompt enforces: running already owns the legs, lifting backs off in Peak weeks, no day is ever blank, and session count matches real cadence rather than an invented five-day split.
+
+Placing sessions onto days — and re-placing them when a day goes off plan — is deterministic (`lib/planner/schedule.ts`), so a reshuffle is instant and costs no AI call. Past days freeze. A lift session only counts as done when the regions actually trained overlap what it targeted, so training chest on the planned legs day marks the day off-script and returns legs to the pool. Leg-taxing sessions are kept off the days either side of a key run.
 
 ## Known Bugs Already Fixed (don't reintroduce)
 1. **Timezone rollover** — use a local-date helper (year/month/day from `Date` object directly) rather than `.toISOString()` slicing, which rolls to UTC and can shift the date near midnight.

@@ -10,6 +10,7 @@ import { RACE_DATE, GOAL_TIME, GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathon
 import ChartFrame from "@/components/charts/ChartFrame";
 import ChartCarousel from "@/components/charts/ChartCarousel";
 import TodayPlan from "@/components/TodayPlan";
+import BodyMap, { type BodyRegionData } from "@/components/BodyMap";
 import { localDateKey } from "@/lib/format";
 import type { WeekPlan } from "@/lib/planner/types";
 import BarChart from "@/components/charts/BarChart";
@@ -69,6 +70,8 @@ export default function StatsPage() {
   const [planError, setPlanError] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => localDateKey(new Date()));
+  const [bodyRegions, setBodyRegions] = useState<BodyRegionData[] | null>(null);
+  const [bodyWindow, setBodyWindow] = useState<"7d" | "all">("7d");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,6 +89,13 @@ export default function StatsPage() {
   useEffect(() => {
     loadPlan(false);
   }, []);
+
+  useEffect(() => {
+    fetch(`/api/muscle-map?window=${bodyWindow}`)
+      .then((res) => res.json())
+      .then((json) => setBodyRegions(json.error ? null : json.regions))
+      .catch(() => setBodyRegions(null));
+  }, [bodyWindow]);
 
   useEffect(() => {
     loadStats(range);
@@ -223,6 +233,12 @@ export default function StatsPage() {
           onSelectDate={setSelectedDate}
         />
       ) : null}
+
+      {bodyRegions && (
+        <div className="mt-4 px-4">
+          <BodyMap regions={bodyRegions} window={bodyWindow} onWindowChange={setBodyWindow} />
+        </div>
+      )}
 
       <div className="mt-5 px-4">
         <Link href="/marathon" className="card flex items-center justify-between bg-gradient-to-r from-accent/20 to-transparent">
