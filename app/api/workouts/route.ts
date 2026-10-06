@@ -1,9 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { parseWorkoutEntry } from "@/lib/anthropic";
+import { parseWorkoutEntry, type ParsedWorkout } from "@/lib/anthropic";
+import { normalizeExerciseName } from "@/lib/format";
+import { cleanRegions } from "@/lib/muscles";
 import type { Exercise } from "@/lib/types";
 
 export const runtime = "nodejs";
+
+/**
+ * Files any exercise the parser hasn't seen before into the exercise →
+ * muscle lookup. First tagging wins: existing rows (including hand-seeded
+ * and hand-corrected ones) are never overwritten, so fixing a bad tag is a
+ * one-row edit that applies to every session using that movement.
+ *
+ * Failures are swallowed — this is secondary bookkeeping and must never
+ * fail a workout that already saved.
+ */
+async function recordExerciseMuscles(parsed: ParsedWorkout) {
+  try {
+    const byKey = new Map<string, { key: string; display_name: string; primary_muscles: string[]; secondary_muscles: string[]; source: string }>();
+    for (const ex of parsed.exercises ?? []) {
+      const key = normalizeExerciseName(ex.name ?? "");
+      if (!key || byKey.has(key)) continue;
+      const primary = cleanRegions(ex.primary_muscles);
+      const secondary = cleanRegions(ex.secondary_muscles).filter((r) => !primary.includes(r));
+      if (primary.length === 0 && secondary.length === 0) continue;
+      byKey.set(key, { key, display_name: ex.name, primary_muscles: primary, secondary_muscles: secondary, source: "ai" });
+    }
+    if (byKey.size === 0) return;
+    await supabaseAdmin()
+      .from("exercise_muscles")
+      .upsert(Array.from(byKey.values()), { onConflict: "key", ignoreDuplicates: true });
+  } catch {
+    // Non-critical.
+  }
+}
 
 export async function GET(req: NextRequest) {
   const limit = Number(req.nextUrl.searchParams.get("limit") ?? 50);
@@ -52,11 +83,16 @@ export async function POST(req: NextRequest) {
     const historyContext = await buildWorkoutHistoryContext();
     const parsed = await parseWorkoutEntry(text, historyContext);
 
+    // Muscle tags live in the exercise_muscles lookup, not on the workout
+    // row — storing them per session would let the same movement drift into
+    // disagreeing tags across entries.
+    const exercises = (parsed.exercises ?? []).map((ex) => ({ name: ex.name, sets: ex.sets }));
+
     const { data, error } = await supabaseAdmin()
       .from("workouts")
       .insert({
         raw_text: text,
-        exercises: parsed.exercises,
+        exercises,
         duration_minutes: parsed.duration_minutes,
         notes: parsed.notes,
         coaching_feedback: parsed.coaching_feedback,
@@ -76,6 +112,8 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await recordExerciseMuscles(parsed);
 
     return NextResponse.json({ workout: data }, { status: 201 });
   } catch (err) {

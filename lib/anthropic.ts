@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { formatDuration, formatPace } from "@/lib/format";
 import { describeIntervals } from "@/lib/intervals";
+import { MUSCLE_REGIONS } from "@/lib/muscles";
 import type { RunIntervals } from "@/lib/types";
 
 const MODEL = "claude-sonnet-4-6";
@@ -100,6 +101,8 @@ export interface ParsedWorkout {
   exercises: {
     name: string;
     sets: { reps: number | null; weight: number | null; weight_unit: string | null }[];
+    primary_muscles: string[];
+    secondary_muscles: string[];
   }[];
   duration_minutes: number | null;
   notes: string;
@@ -161,8 +164,22 @@ const workoutSchema = {
               additionalProperties: false,
             },
           },
+          primary_muscles: {
+            type: "array",
+            items: { type: "string", enum: [...MUSCLE_REGIONS] },
+            description:
+              "The muscle regions this movement directly targets — usually 1-2. A barbell bench press is " +
+              "['chest']; a bent over row is ['lats','mid_back'].",
+          },
+          secondary_muscles: {
+            type: "array",
+            items: { type: "string", enum: [...MUSCLE_REGIONS] },
+            description:
+              "Regions meaningfully assisting but not the target — e.g. ['front_delts','triceps'] on a bench " +
+              "press. Empty array for isolation movements that have none.",
+          },
         },
-        required: ["name", "sets"],
+        required: ["name", "sets", "primary_muscles", "secondary_muscles"],
         additionalProperties: false,
       },
     },

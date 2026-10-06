@@ -123,6 +123,23 @@ alter table favorites add column if not exists updated_at timestamptz not null d
 create index if not exists favorites_type_idx on favorites (type);
 create unique index if not exists favorites_key_idx on favorites (key) where key is not null;
 
+-- ── Exercise → muscle lookup ──────────────────────────────────────────────
+-- Maps a normalized exercise name (see normalizeExerciseName in lib/format)
+-- to the fine-grained muscle regions it works, for the body-map avatar and
+-- the session planner. Keyed by exercise rather than stored per workout so
+-- one correction fixes every past and future session that used the movement.
+-- `source` is 'seed' for hand-tagged entries, 'ai' for ones the workout
+-- parser proposed the first time it met the exercise.
+create table if not exists exercise_muscles (
+  key text primary key,
+  display_name text not null,
+  primary_muscles jsonb not null default '[]'::jsonb, -- [MuscleRegion]
+  secondary_muscles jsonb not null default '[]'::jsonb, -- [MuscleRegion]
+  source text not null default 'ai',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- ── Row Level Security ──────────────────────────────────────────────────────
 -- This app is single-tenant: all reads/writes go through server-side API
 -- routes using the Supabase service role key, which bypasses RLS. RLS is
@@ -132,3 +149,4 @@ alter table workouts enable row level security;
 alter table runs enable row level security;
 alter table meals enable row level security;
 alter table favorites enable row level security;
+alter table exercise_muscles enable row level security;
