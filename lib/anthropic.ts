@@ -540,3 +540,141 @@ export async function summarizeTraining(input: {
     inputSchema: summarySchema,
   });
 }
+
+// ── Week planner ────────────────────────────────────────────────────────
+
+export interface GeneratedExercise {
+  name: string;
+  sets: number;
+  reps: string;
+  target: string | null;
+  cue: string | null;
+  is_new: boolean;
+  regions: string[];
+}
+
+export interface GeneratedSession {
+  kind: "lift" | "run" | "lift_and_run" | "active_recovery" | "rest";
+  title: string;
+  rationale: string;
+  regions: string[];
+  preferred_dow: number | null;
+  taxes_legs: boolean;
+  priority: number;
+  exercises: GeneratedExercise[];
+}
+
+export interface GeneratedWeekPlan {
+  headline: string;
+  sessions: GeneratedSession[];
+}
+
+const weekPlanSchema = {
+  type: "object",
+  properties: {
+    headline: {
+      type: "string",
+      description: "A short line framing the week, e.g. 'Peak volume — lifting stays light'. Under 60 characters.",
+    },
+    sessions: {
+      type: "array",
+      description:
+        "Every session the week should contain, including runs. One per training slot — do not emit more lift " +
+        "sessions than the athlete's cadence supports.",
+      items: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["lift", "run", "lift_and_run", "active_recovery", "rest"] },
+          title: { type: "string", description: "Short session name, e.g. 'Pull + rear delts' or 'Long run'." },
+          rationale: {
+            type: "string",
+            description:
+              "One sentence on why this session is in the week, referencing the actual data — which regions are " +
+              "stale, or how it sits against the run load.",
+          },
+          regions: {
+            type: "array",
+            items: { type: "string", enum: [...MUSCLE_REGIONS] },
+            description: "Muscle regions this session targets. Empty for pure run or rest days.",
+          },
+          preferred_dow: {
+            type: ["integer", "null"],
+            description:
+              "Preferred day of week, 0=Sunday through 6=Saturday, or null if it can go anywhere. Long runs " +
+              "usually belong on a weekend. This is a hint — the scheduler makes the final placement.",
+          },
+          taxes_legs: {
+            type: "boolean",
+            description:
+              "True if this session leaves the legs fatigued (squats, deadlifts, lunges, hard intervals). Used to " +
+              "keep it away from key run days.",
+          },
+          priority: {
+            type: "integer",
+            description: "1 is most important. Key runs and the most overdue muscle work should sort first.",
+          },
+          exercises: {
+            type: "array",
+            description: "Empty for rest days. 3-6 movements for a lift session, 1-3 for active recovery.",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Prefer a movement from the athlete's anchor list where one fits." },
+                sets: { type: "integer" },
+                reps: { type: "string", description: "A range or duration, e.g. '6-8', '12-15', '30s per side'." },
+                target: {
+                  type: ["string", "null"],
+                  description:
+                    "Suggested load, based on the athlete's last top set for that lift — e.g. '150 lb' when they " +
+                    "last hit 145. Null for bodyweight movements or ones with no history.",
+                },
+                cue: {
+                  type: ["string", "null"],
+                  description:
+                    "One short form cue, ONLY for movements the athlete has never logged. Null for familiar lifts.",
+                },
+                is_new: { type: "boolean", description: "True if this movement is not in the anchor list." },
+                regions: { type: "array", items: { type: "string", enum: [...MUSCLE_REGIONS] } },
+              },
+              required: ["name", "sets", "reps", "target", "cue", "is_new", "regions"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["kind", "title", "rationale", "regions", "preferred_dow", "taxes_legs", "priority", "exercises"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["headline", "sessions"],
+  additionalProperties: false,
+};
+
+export async function generateWeekPlan(contextJson: string): Promise<GeneratedWeekPlan> {
+  return parseWithTool<GeneratedWeekPlan>({
+    system:
+      "You are a strength and marathon coach planning one training week (Sunday–Saturday) for an athlete training " +
+      "for a 3:30:00 marathon at 8:01/mi goal pace.\n\n" +
+      "The single most important constraint: running already loads the legs. Heavy leg work the day before or " +
+      "after a long run or an interval session costs more than it gains, and during Peak weeks lifting should " +
+      "back off so the running is not compromised. Schedule lifting around the run plan, not the other way round.\n\n" +
+      "Every day gets something — there are no blank days. When the right answer is not a gym session, suggest " +
+      "active recovery: a walk, mobility or yoga, or light accessory work for the small muscles that normal " +
+      "pressing and pulling sessions miss. A genuine rest day is a valid session; say plainly that resting is " +
+      "the work.\n\n" +
+      "Bias the plan toward what the data says is neglected. Prefer movements from the athlete's anchor list and " +
+      "progress them from their last top set. Only introduce a new movement when nothing in the list covers a " +
+      "neglected region, and when you do, give one short form cue. Leg and core work for a marathoner in a build " +
+      "block should be runner-friendly — split squats, step-ups, glute and hip stability, calf and soleus work, " +
+      "anti-rotation core — not maximal bilateral loading.\n\n" +
+      "Match the number of lift sessions to the athlete's actual cadence; do not invent a five-day split for " +
+      "someone who lifts twice a week.\n\n" + todayContext(),
+    userText:
+      "Plan this athlete's week from the following data. Everything here is computed from their logs — treat it " +
+      "as fact and do not restate it back.\n\n" +
+      contextJson,
+    toolName: "record_week_plan",
+    toolDescription: "Records the sessions that make up one training week.",
+    inputSchema: weekPlanSchema,
+  });
+}

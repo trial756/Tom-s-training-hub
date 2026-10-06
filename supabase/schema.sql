@@ -140,6 +140,24 @@ create table if not exists exercise_muscles (
   updated_at timestamptz not null default now()
 );
 
+-- ── Week plans ────────────────────────────────────────────────────────────
+-- One persisted plan per Sunday–Saturday training week. Stored rather than
+-- regenerated per request so the plan is stable to look at: `sessions` is
+-- what the week should contain, `assignments` is which day each session
+-- currently sits on. Days that have passed freeze; logging something
+-- off-plan re-flows the days still ahead (see lib/planner/schedule.ts).
+create table if not exists week_plans (
+  week_start date primary key, -- Sunday
+  plan_week integer, -- marathon plan week 1-27
+  phase text,
+  headline text,
+  sessions jsonb not null default '[]'::jsonb, -- [PlanSession]
+  assignments jsonb not null default '{}'::jsonb, -- {sessionId: date}
+  context jsonb, -- the facts packet it was generated from, for explainability
+  generated_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- ── Row Level Security ──────────────────────────────────────────────────────
 -- This app is single-tenant: all reads/writes go through server-side API
 -- routes using the Supabase service role key, which bypasses RLS. RLS is
@@ -150,3 +168,4 @@ alter table runs enable row level security;
 alter table meals enable row level security;
 alter table favorites enable row level security;
 alter table exercise_muscles enable row level security;
+alter table week_plans enable row level security;
