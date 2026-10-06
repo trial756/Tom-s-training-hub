@@ -120,6 +120,19 @@ export function buildPlannerContext(opts: {
   const liftDaysPerWeek = Math.max(1, Math.round(distinctDays(opts.workouts) / CADENCE_WEEKS));
   const runDaysPerWeek = Math.max(1, Math.round(distinctDays(opts.runs) / CADENCE_WEEKS));
 
+  // Actual recent volume. The plan's target says what the block wants; this
+  // says what the athlete is currently built for, and the gap between them
+  // is what stops the planner prescribing an unsafe jump.
+  const cadenceRuns = opts.runs.filter((r) => {
+    const d = localDateKey(new Date(r.logged_at));
+    return d >= cadenceKey && d < weekStart;
+  });
+  const cadenceMiles = cadenceRuns.reduce((sum, r) => sum + (Number(r.distance_miles) || 0), 0);
+  const avgWeeklyMiles = Math.round((cadenceMiles / CADENCE_WEEKS) * 10) / 10;
+  const typicalRunMiles = cadenceRuns.length
+    ? Math.max(2, Math.round((cadenceMiles / cadenceRuns.length) * 10) / 10)
+    : 3;
+
   // ── Strength anchors: what to progress from ───────────────────────────
   const lifts = new Map<string, { name: string; counts: Map<string, number>; top: number | null; last: string | null; days: Set<string> }>();
   for (const workout of opts.workouts) {
@@ -172,6 +185,8 @@ export function buildPlannerContext(opts: {
     neglected,
     liftDaysPerWeek,
     runDaysPerWeek,
+    avgWeeklyMiles,
+    typicalRunMiles,
     anchors,
   };
 }

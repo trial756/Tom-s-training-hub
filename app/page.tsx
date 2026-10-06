@@ -66,6 +66,7 @@ export default function StatsPage() {
   const [trends, setTrends] = useState<TrendsResponse | null>(null);
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [planContext, setPlanContext] = useState<{ milesThisWeek: number; marathon: { weeklyMileage: number } | null } | null>(null);
+  const [mileageNote, setMileageNote] = useState<string | null>(null);
   const [planLoading, setPlanLoading] = useState(true);
   const [planError, setPlanError] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
@@ -114,6 +115,7 @@ export default function StatsPage() {
       if (!res.ok || json.error) throw new Error(json.error ?? "Could not build this week's plan.");
       setPlan(json.plan);
       setPlanContext(json.context ?? null);
+      setMileageNote(json.mileage?.note ?? null);
       const todayKey = localDateKey(new Date());
       if (json.plan?.days?.some((d: { date: string }) => d.date === todayKey)) setSelectedDate(todayKey);
     } catch (err) {
@@ -231,6 +233,7 @@ export default function StatsPage() {
           regenerating={regenerating}
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
+          mileageNote={mileageNote}
         />
       ) : null}
 

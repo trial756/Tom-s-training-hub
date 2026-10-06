@@ -44,10 +44,12 @@ export default function TodayPlan({
   regenerating,
   selectedDate,
   onSelectDate,
+  mileageNote,
 }: {
   plan: WeekPlan;
   milesThisWeek: number;
   weeklyMileage: number | null;
+  mileageNote?: string | null;
   onRegenerate: () => void;
   regenerating: boolean;
   selectedDate: string;
@@ -74,7 +76,13 @@ export default function TodayPlan({
         </div>
       )}
 
-      {plan.headline && <p className="mb-3 text-sm font-semibold text-ink">{plan.headline}</p>}
+      {plan.headline && <p className="mb-2 text-sm font-semibold text-ink">{plan.headline}</p>}
+
+      {mileageNote && (
+        <p className="mb-3 rounded-lg border border-run/25 bg-run/10 p-2 text-xs leading-snug text-gray-300">
+          {mileageNote}
+        </p>
+      )}
 
       {/* Week strip */}
       <div className="mb-4 flex gap-1.5">
@@ -104,6 +112,9 @@ export default function TodayPlan({
               {isToday ? "Today" : dayName(selected?.date ?? "")}
             </p>
             <h2 className="text-lg font-bold text-ink">{session?.title ?? "Nothing planned"}</h2>
+            {session?.addedByReconciler && (
+              <span className="text-[11px] font-medium text-run">added to close the week&apos;s mileage</span>
+            )}
           </div>
           {session && <span className="pill shrink-0 bg-base-800 text-muted">{KIND_LABEL[session.kind]}</span>}
         </div>

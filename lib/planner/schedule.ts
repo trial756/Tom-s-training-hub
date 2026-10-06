@@ -53,6 +53,7 @@ export function fallbackSession(id: string): PlanSession {
     priority: 99,
     preferredDow: null,
     taxesLegs: false,
+    miles: null,
   };
 }
 

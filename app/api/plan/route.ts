@@ -6,6 +6,7 @@ import { cleanRegions } from "@/lib/muscles";
 import { buildExerciseLookup } from "@/lib/muscleCoverage";
 import { buildPlannerContext } from "@/lib/planner/context";
 import { scheduleWeek, type DayLog } from "@/lib/planner/schedule";
+import { reconcileMileage } from "@/lib/planner/mileage";
 import type { PlanSession, WeekPlan } from "@/lib/planner/types";
 
 export const runtime = "nodejs";
@@ -31,6 +32,7 @@ function toSessions(generated: GeneratedSession[]): PlanSession[] {
     priority: Number.isFinite(s.priority) ? s.priority : 50,
     preferredDow: s.preferred_dow != null && s.preferred_dow >= 0 && s.preferred_dow <= 6 ? s.preferred_dow : null,
     taxesLegs: !!s.taxes_legs,
+    miles: typeof s.miles === "number" && s.miles > 0 ? s.miles : null,
     exercises: (s.exercises ?? []).map((e) => ({
       name: e.name,
       sets: Number(e.sets) || 3,
@@ -149,14 +151,27 @@ async function handle(_req: NextRequest, forceRegenerate: boolean) {
     }
 
     // ── Place sessions, then persist the placement so it stays stable ───
-    const sessions = [...(stored.sessions ?? [])];
-    const days = scheduleWeek({
-      sessions,
+    const initialSessions = [...(stored.sessions ?? [])];
+    const scheduled = scheduleWeek({
+      sessions: initialSessions,
       weekDates,
       today: todayKey,
       logs,
       priorAssignments: stored.assignments ?? {},
     });
+
+    // Falling behind shouldn't just reshuffle — the miles have to reappear.
+    const reconciled = reconcileMileage({
+      sessions: initialSessions,
+      days: scheduled,
+      today: todayKey,
+      milesThisWeek: context.milesThisWeek,
+      weeklyTarget: context.marathon?.weeklyMileage ?? null,
+      avgWeeklyMiles: context.avgWeeklyMiles,
+      typicalRunMiles: context.typicalRunMiles,
+    });
+    const sessions = reconciled.sessions;
+    const days = reconciled.days;
 
     const assignments: Record<string, string> = {};
     for (const day of days) {
@@ -181,7 +196,7 @@ async function handle(_req: NextRequest, forceRegenerate: boolean) {
       generatedAt: new Date().toISOString(),
     };
 
-    return NextResponse.json({ plan, context });
+    return NextResponse.json({ plan, context, mileage: { gap: reconciled.gap, added: reconciled.added, residual: reconciled.residual, note: reconciled.note } });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

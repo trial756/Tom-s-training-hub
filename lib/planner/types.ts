@@ -34,6 +34,10 @@ export interface PlanSession {
   preferredDow: number | null;
   /** True when heavy legs make this a poor neighbour for a key run day. */
   taxesLegs: boolean;
+  /** Planned distance for run sessions, so weekly mileage can be reconciled. */
+  miles: number | null;
+  /** Set when the reconciler added or lengthened this run to close a gap. */
+  addedByReconciler?: boolean;
 }
 
 export type PlanDayStatus = "upcoming" | "today" | "done" | "off_script" | "missed";
@@ -104,5 +108,9 @@ export interface PlannerContext {
   neglected: string[];
   liftDaysPerWeek: number;
   runDaysPerWeek: number;
+  /** Recent actual weekly mileage, which bounds how fast volume may grow. */
+  avgWeeklyMiles: number;
+  /** Typical single-run distance, used when sizing an added run. */
+  typicalRunMiles: number;
   anchors: LiftAnchor[];
 }

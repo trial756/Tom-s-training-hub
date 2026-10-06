@@ -554,6 +554,7 @@ export interface GeneratedExercise {
 }
 
 export interface GeneratedSession {
+  miles: number | null;
   kind: "lift" | "run" | "lift_and_run" | "active_recovery" | "rest";
   title: string;
   rationale: string;
@@ -603,6 +604,12 @@ const weekPlanSchema = {
               "Preferred day of week, 0=Sunday through 6=Saturday, or null if it can go anywhere. Long runs " +
               "usually belong on a weekend. This is a hint — the scheduler makes the final placement.",
           },
+          miles: {
+            type: ["number", "null"],
+            description:
+              "Planned distance in miles for any session involving a run; null otherwise. The week's run " +
+              "distances should add up toward the weekly mileage target alongside what's already been run.",
+          },
           taxes_legs: {
             type: "boolean",
             description:
@@ -641,7 +648,7 @@ const weekPlanSchema = {
             },
           },
         },
-        required: ["kind", "title", "rationale", "regions", "preferred_dow", "taxes_legs", "priority", "exercises"],
+        required: ["kind", "title", "rationale", "regions", "preferred_dow", "miles", "taxes_legs", "priority", "exercises"],
         additionalProperties: false,
       },
     },
