@@ -38,6 +38,16 @@ export default function LogPage() {
 
   useEffect(() => {
     loadRecent();
+    // Arriving from a Today plan session: start from its exercises rather
+    // than a blank box. Read off location instead of useSearchParams so the
+    // page stays statically rendered without a Suspense boundary.
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const prefill = params.get("prefill");
+      const planDate = params.get("date");
+      if (prefill) setText(prefill);
+      if (planDate && /^\d{4}-\d{2}-\d{2}$/.test(planDate)) setDate(planDate);
+    }
   }, []);
 
   async function loadRecent() {

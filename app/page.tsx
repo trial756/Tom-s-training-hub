@@ -8,6 +8,10 @@ import Spinner from "@/components/Spinner";
 import { formatPace, formatMinutes } from "@/lib/format";
 import { RACE_DATE, GOAL_TIME, GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
 import ChartFrame from "@/components/charts/ChartFrame";
+import ChartCarousel from "@/components/charts/ChartCarousel";
+import TodayPlan from "@/components/TodayPlan";
+import { localDateKey } from "@/lib/format";
+import type { WeekPlan } from "@/lib/planner/types";
 import BarChart from "@/components/charts/BarChart";
 import GroupedBarChart from "@/components/charts/GroupedBarChart";
 import LineChart from "@/components/charts/LineChart";
@@ -59,6 +63,12 @@ export default function StatsPage() {
   const [range, setRange] = useState<Range>("7day");
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [trends, setTrends] = useState<TrendsResponse | null>(null);
+  const [plan, setPlan] = useState<WeekPlan | null>(null);
+  const [planContext, setPlanContext] = useState<{ milesThisWeek: number; marathon: { weeklyMileage: number } | null } | null>(null);
+  const [planLoading, setPlanLoading] = useState(true);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(() => localDateKey(new Date()));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,11 +84,35 @@ export default function StatsPage() {
   const [importResult, setImportResult] = useState<string | null>(null);
 
   useEffect(() => {
+    loadPlan(false);
+  }, []);
+
+  useEffect(() => {
     loadStats(range);
     setSummary(null);
     setSummaryError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
+
+  async function loadPlan(force: boolean) {
+    if (force) setRegenerating(true);
+    else setPlanLoading(true);
+    setPlanError(null);
+    try {
+      const res = await fetch(force ? "/api/plan" : "/api/plan", force ? { method: "POST" } : undefined);
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error ?? "Could not build this week's plan.");
+      setPlan(json.plan);
+      setPlanContext(json.context ?? null);
+      const todayKey = localDateKey(new Date());
+      if (json.plan?.days?.some((d: { date: string }) => d.date === todayKey)) setSelectedDate(todayKey);
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setPlanLoading(false);
+      setRegenerating(false);
+    }
+  }
 
   function loadStats(r: Range) {
     setLoading(true);
@@ -165,9 +199,32 @@ export default function StatsPage() {
 
   return (
     <div>
-      <PageHeader title="Tom's Training Hub" subtitle="Your training at a glance." />
+      <PageHeader title="Today" subtitle="Your plan for the week." />
 
-      <div className="px-4">
+      {planLoading ? (
+        <Spinner label="Building this week's plan…" />
+      ) : planError ? (
+        <div className="px-4">
+          <div className="card">
+            <p className="text-sm text-danger">{planError}</p>
+            <button onClick={() => loadPlan(true)} className="btn-secondary mt-3 w-full text-sm">
+              Try again
+            </button>
+          </div>
+        </div>
+      ) : plan ? (
+        <TodayPlan
+          plan={plan}
+          milesThisWeek={planContext?.milesThisWeek ?? 0}
+          weeklyMileage={planContext?.marathon?.weeklyMileage ?? null}
+          onRegenerate={() => loadPlan(true)}
+          regenerating={regenerating}
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+        />
+      ) : null}
+
+      <div className="mt-5 px-4">
         <Link href="/marathon" className="card flex items-center justify-between bg-gradient-to-r from-accent/20 to-transparent">
           <div>
             <p className="text-xs uppercase tracking-wide text-gray-400">Marathon countdown</p>
@@ -177,7 +234,11 @@ export default function StatsPage() {
         </Link>
       </div>
 
-      <div className="mt-4 flex gap-2 px-4">
+      <div className="mt-6 px-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Stats</h2>
+      </div>
+
+      <div className="mt-2 flex gap-2 px-4">
         {(["7day", "month"] as Range[]).map((r) => (
           <button
             key={r}
@@ -248,8 +309,9 @@ export default function StatsPage() {
           </div>
 
           {trends && (
-            <div className="mt-6 space-y-3 px-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Running</h2>
+            <div className="mt-6 px-4">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Trends</h2>
+              <ChartCarousel>
 
               <ChartFrame
                 title="Weekly Mileage"
@@ -295,8 +357,6 @@ export default function StatsPage() {
                 />
               </ChartFrame>
 
-              <h2 className="pt-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Fuel</h2>
-
               <ChartFrame
                 title="Calories In vs Burned"
                 subtitle={range === "month" ? "Last 30 days" : "Last 7 days"}
@@ -340,8 +400,6 @@ export default function StatsPage() {
                 />
               </ChartFrame>
 
-              <h2 className="pt-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Strength</h2>
-
               <ChartFrame
                 title="Training Volume"
                 subtitle={`Last ${trends.trendWeeks} weeks · reps × weight`}
@@ -378,6 +436,7 @@ export default function StatsPage() {
                   formatValue={(v) => `${v} lb`}
                 />
               </ChartFrame>
+              </ChartCarousel>
             </div>
           )}
 
