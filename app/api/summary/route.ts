@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { summarizeTraining } from "@/lib/anthropic";
-import { formatPace, localDateKey, shiftDays, startOfLocalDay } from "@/lib/format";
+import { APP_TIMEZONE, formatPace, localDateKey, shiftDays, startOfLocalDay } from "@/lib/format";
 
 export const runtime = "nodejs";
 
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
     const workoutsSummary = workouts
       .map((w) => {
-        const date = new Date(w.logged_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const date = new Date(w.logged_at).toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, month: "short", day: "numeric" });
         const groups = (w.muscle_groups ?? []).join("/") || w.type || "workout";
         return `${date} — ${groups}${w.duration_minutes ? ` (${w.duration_minutes} min)` : ""}`;
       })
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
     const runsSummary = runs
       .map((r) => {
-        const date = new Date(r.logged_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const date = new Date(r.logged_at).toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, month: "short", day: "numeric" });
         const bits = [r.run_type ?? "Run"];
         if (r.distance_miles != null) bits.push(`${r.distance_miles}mi`);
         if (r.pace_seconds_per_mile != null) bits.push(formatPace(r.pace_seconds_per_mile));
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
 
     const mealsSummary = meals
       .map((m) => {
-        const date = new Date(m.logged_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const date = new Date(m.logged_at).toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, month: "short", day: "numeric" });
         return `${date} — ${m.meal_type ?? "meal"}${m.calories ? `, ${m.calories} cal` : ""}`;
       })
       .join("\n");

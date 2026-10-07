@@ -55,6 +55,10 @@ tracker, and the timezone fix.
   Use `localDateKey` / `startOfLocalDay` / `startOfWeekSunday` / `shiftDays`
   from `lib/format.ts`. Never `setDate` arithmetic — it drifts an hour across
   DST and **Nov 1 is inside this block**.
+  Any server-side `toLocaleDateString` / `toLocaleString` needs
+  `timeZone: APP_TIMEZONE` too, and so does anything that reads the weekday —
+  `todayContext()` in the AI prompts once told a Saturday-night log it was
+  Sunday because it used `getDay()`.
 
 ---
 

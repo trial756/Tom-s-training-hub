@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateRunCoaching, type StructuredRunInput } from "@/lib/anthropic";
-import { formatDuration, formatPace } from "@/lib/format";
+import { APP_TIMEZONE, formatDuration, formatPace } from "@/lib/format";
 import { sanitizeIntervals } from "@/lib/intervals";
 import { RUN_TYPES } from "@/lib/types";
 
@@ -47,7 +47,7 @@ async function buildRunHistoryContext(): Promise<string> {
 
   return (data ?? [])
     .map((r) => {
-      const date = new Date(r.logged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const date = new Date(r.logged_at).toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, month: "short", day: "numeric", year: "numeric" });
       const bits = [`${r.run_type ?? "Run"}`];
       if (r.distance_miles != null) bits.push(`${r.distance_miles}mi`);
       if (r.duration_seconds != null) bits.push(`in ${formatDuration(r.duration_seconds)}`);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { parseWorkoutEntry, type ParsedWorkout } from "@/lib/anthropic";
-import { normalizeExerciseName } from "@/lib/format";
+import { APP_TIMEZONE, normalizeExerciseName } from "@/lib/format";
 import { cleanRegions } from "@/lib/muscles";
 import type { Exercise } from "@/lib/types";
 
@@ -65,7 +65,7 @@ async function buildWorkoutHistoryContext(): Promise<string> {
 
   return (data ?? [])
     .map((w) => {
-      const date = new Date(w.logged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const date = new Date(w.logged_at).toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, month: "short", day: "numeric", year: "numeric" });
       const groups = (w.muscle_groups ?? []).length ? ` [${(w.muscle_groups ?? []).join(", ")}]` : "";
       return `${date}${groups} — ${summarizeExercises(w.exercises ?? [])}`;
     })

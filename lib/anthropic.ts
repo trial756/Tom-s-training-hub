@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { formatDuration, formatPace } from "@/lib/format";
+import { APP_TIMEZONE, formatDuration, formatPace } from "@/lib/format";
 import { describeIntervals } from "@/lib/intervals";
 import { MUSCLE_REGIONS } from "@/lib/muscles";
 import type { RunIntervals } from "@/lib/types";
@@ -58,21 +58,20 @@ async function parseWithTool<T>(opts: {
 
 // ── Shared context ──────────────────────────────────────────────────────
 
-const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
 /**
  * Included in every coaching prompt so Claude knows where "today" falls in
  * the Sunday–Saturday training week — without this, late-week logs (Fri/Sat)
  * generated advice implying days that don't exist (e.g. "add 2 more runs
- * this week"). Uses Date's local getters, not toISOString() slicing, to
- * avoid UTC rollover near midnight. Explicitly framed as background context
- * rather than something to restate, so responses don't open with "Since
- * it's Tuesday..." every time.
+ * this week"). Resolved in APP_TIMEZONE, not the server's own zone: on
+ * Vercel (UTC) the machine's local getters report tomorrow from 7pm Central,
+ * so a Saturday-evening log was told it was Sunday. Explicitly framed as
+ * background context rather than something to restate, so responses don't
+ * open with "Since it's Tuesday..." every time.
  */
 function todayContext(): string {
   const now = new Date();
-  const weekday = WEEKDAY_NAMES[now.getDay()];
-  const dateStr = now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const weekday = now.toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, weekday: "long" });
+  const dateStr = now.toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, month: "long", day: "numeric", year: "numeric" });
   return (
     `Background context for your own reasoning only, not something to state back: today is ${weekday}, ${dateStr}. ` +
     `Training weeks run Sunday through Saturday. Use this to reason correctly about "this week" vs "next week" — ` +

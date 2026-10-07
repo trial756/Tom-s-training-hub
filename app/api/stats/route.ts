@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { localDateKey, shiftDays, startOfLocalDay, summarizeExerciseNames } from "@/lib/format";
+import { APP_TIMEZONE, localDateKey, shiftDays, startOfLocalDay, summarizeExerciseNames } from "@/lib/format";
 
 export const runtime = "nodejs";
 
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       const key = localDateKey(d);
       dayBuckets.set(key, {
         date: key,
-        label: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+        label: d.toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, weekday: "short", month: "short", day: "numeric" }),
         workouts: [],
         runs: [],
         meals: [],
