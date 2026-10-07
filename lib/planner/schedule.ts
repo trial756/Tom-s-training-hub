@@ -1,3 +1,4 @@
+import { daysBetweenKeys } from "@/lib/format";
 import type { MuscleRegion } from "@/lib/muscles";
 import type { PlanDay, PlanDayStatus, PlanSession } from "@/lib/planner/types";
 
@@ -161,10 +162,8 @@ export function scheduleWeek(opts: {
       .map(([date]) => date)
   );
   const adjacentToKeyRun = (date: string) => {
-    const t = new Date(`${date}T00:00:00`).getTime();
     for (const key of keyRunDates) {
-      const diff = Math.abs(t - new Date(`${key}T00:00:00`).getTime()) / 86400000;
-      if (diff === 1) return true;
+      if (Math.abs(daysBetweenKeys(key, date)) === 1) return true;
     }
     return false;
   };

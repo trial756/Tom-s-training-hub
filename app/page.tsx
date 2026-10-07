@@ -11,7 +11,7 @@ import ChartFrame from "@/components/charts/ChartFrame";
 import ChartCarousel from "@/components/charts/ChartCarousel";
 import TodayPlan from "@/components/TodayPlan";
 import BodyMap, { type BodyRegionData } from "@/components/BodyMap";
-import { localDateKey } from "@/lib/format";
+import { daysBetweenKeys, localDateKey } from "@/lib/format";
 import type { WeekPlan } from "@/lib/planner/types";
 import BarChart from "@/components/charts/BarChart";
 import GroupedBarChart from "@/components/charts/GroupedBarChart";
@@ -200,10 +200,7 @@ export default function StatsPage() {
     }
   }
 
-  const raceDate = new Date(`${RACE_DATE}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const daysToRace = Math.max(0, Math.round((raceDate.getTime() - today.getTime()) / 86400000));
+  const daysToRace = Math.max(0, daysBetweenKeys(localDateKey(new Date()), RACE_DATE));
 
   const maxMuscleCount = stats ? Math.max(...stats.muscleGroups.map((m) => m.count), 1) : 1;
   const totalMuscleHits = stats ? stats.muscleGroups.reduce((sum, m) => sum + m.count, 0) : 0;

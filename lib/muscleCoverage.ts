@@ -1,4 +1,4 @@
-import { localDateKey, normalizeExerciseName } from "@/lib/format";
+import { daysBetweenKeys, localDateKey, normalizeExerciseName } from "@/lib/format";
 import { COARSE_TO_REGIONS, MUSCLE_REGIONS, RUN_REGIONS, type MuscleRegion } from "@/lib/muscles";
 
 export interface ExerciseLookupEntry {
@@ -78,8 +78,7 @@ export function computeMuscleActivity(
 ): MuscleActivity {
   const activity = emptyActivity();
   const todayKey = localDateKey(today);
-  const daysBetween = (dayKey: string) =>
-    Math.round((new Date(`${todayKey}T00:00:00`).getTime() - new Date(`${dayKey}T00:00:00`).getTime()) / 86400000);
+  const daysBetween = (dayKey: string) => daysBetweenKeys(dayKey, todayKey);
 
   // Distinct days per region, so two sessions in one day count once.
   const daysByRegion = new Map<MuscleRegion, Set<string>>();
