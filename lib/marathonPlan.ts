@@ -46,20 +46,30 @@ const WEEK_TARGETS: [number, number, boolean][] = [
   [45, 19, false], // 15
   [36, 14, true], // 16 recovery
   [47, 20, false], // 17
-  [48, 20, false], // 18
-  [50, 21, false], // 19
-  [38, 15, true], // 20 recovery
-  [50, 22, false], // 21 peak long run
-  [46, 18, false], // 22
-  [38, 16, false], // 23 taper begins
-  [30, 13, false], // 24
-  [24, 10, false], // 25
-  [18, 8, false], // 26
-  [12, 3, false], // 27 race week
+  // ── Rescaled from week 18 (Oct 2026) ──────────────────────────────────
+  // The original curve assumed a 40-50mi base that never materialised —
+  // actual volume through week 17 averaged ~12mi/wk. Holding those targets
+  // meant opening every week 30+ miles behind, which makes the number
+  // meaningless. These are an aggressive but executable ramp off the real
+  // base, front-loading long-run and marathon-pace volume, because with
+  // nine weeks left specific endurance is buildable and a 50mi aerobic base
+  // is not.
+  [20, 15, false], // 18  base re-established, 15mi long already banked
+  [24, 16, false], // 19
+  [27, 18, false], // 20
+  [22, 13, true], // 21 cutback — absorb the jump
+  [30, 20, false], // 22  first 20
+  [31, 16, false], // 23  shorter long, 8mi at MP inside it
+  [33, 21, false], // 24  peak week, last long run
+  [26, 14, false], // 25 taper begins
+  [18, 10, false], // 26
+  [12, 6, false], // 27 race week
 ];
 
 function phaseFor(week: number): PlanPhase {
-  if (week >= 23) return "Taper";
+  // Peak now runs through 24 — the rescaled build peaks later and tapers
+  // over three weeks rather than five.
+  if (week >= 25) return "Taper";
   if (week >= 17) return "Peak";
   if (week >= 9) return "Stamina";
   return "Base Building";

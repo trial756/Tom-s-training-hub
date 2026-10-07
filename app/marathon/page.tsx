@@ -20,6 +20,8 @@ import {
 import { formatPace, formatShortDate, localDateKey } from "@/lib/format";
 import type { Run } from "@/lib/types";
 import ChartFrame from "@/components/charts/ChartFrame";
+import GoalReadiness from "@/components/GoalReadiness";
+import { computeReadiness } from "@/lib/readiness";
 import LineChart from "@/components/charts/LineChart";
 
 const PHASE_COLORS: Record<PlanPhase, string> = {
@@ -76,6 +78,8 @@ export default function MarathonPage() {
       actual: active && w.weekNumber > active.weekNumber ? null : Math.round(milesByWeek[i] * 10) / 10,
     }));
   }, [weeks, runs, active]);
+
+  const readiness = useMemo(() => computeReadiness(runs), [runs]);
 
   const shoeMileage = useMemo(() => {
     const map = new Map<string, number>();
@@ -143,6 +147,12 @@ export default function MarathonPage() {
           </div>
         </div>
       </div>
+
+      {!loadingRuns && runs.length > 0 && (
+        <div className="mt-4 px-4">
+          <GoalReadiness readiness={readiness} goalTime={GOAL_TIME} />
+        </div>
+      )}
 
       {active && (
         <div className="mt-4 px-4">

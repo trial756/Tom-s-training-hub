@@ -91,6 +91,7 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 - Pace Targets table (see below)
 - Shoe Mileage tracker — aggregates run distance by the `shoes` field per run, warns at 350+ mi (typical shoe lifespan ~300–500mi)
 - 27-Week Training Plan — 4 expandable phase cards; **each week row inside is individually expandable**, showing: long run distance, remaining easy/moderate mileage (total − long), and a contextual coaching tip (different for recovery weeks, 20-milers, tempo, marathon-pace, taper, race day, strides — keyword-matched off that week's focus text)
+- **3:30 Readiness** — the goal attempt judged on evidence: longest run (target 20mi by wk 24), longest run held at ≤8:15/mi (target 10mi by wk 23), and 3-week average weekly volume (target 30mi by wk 24). Each marker is graded on whether the remaining gap is still closable at a safe rate, not on elapsed time, so a warning arrives while there's time to act. Also shows a Riegel race equivalent from the best logged effort, labelled as a ceiling rather than a prediction.
 - Race Day Game Plan (by mile segment)
 - Race Fueling Strategy (pre-race, mi 6–22, mi 22–finish, post-race)
 
@@ -110,8 +111,10 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 |---|---|---|---|
 | Base Building | 1–8 | 25–35 | Easy aerobic, zone 2, establish routine |
 | Stamina | 9–16 | 35–45 | Lactate threshold, MP runs, longer longs |
-| Peak | 17–22 | 45–50 | Race simulation, tune-up races, peak longs |
-| Taper | 23–27 | 20–30 | Reduce volume, maintain sharpness |
+| Peak | 17–24 | 20–33 | Race simulation, goal-pace volume, peak longs |
+| Taper | 25–27 | 12–26 | Reduce volume, maintain sharpness |
+
+**Weeks 18–27 were rescaled in Oct 2026.** The original curve assumed a 40–50mi base that never materialised — actual volume through week 17 averaged ~12mi/wk, so the plan was opening every week 30+ miles behind and the number had stopped meaning anything. The rescaled ramp (20 → 24 → 27 → 22 cutback → 30 → 31 → 33, then taper) is an aggressive but executable build off the real base, front-loading long-run and goal-pace volume because with nine weeks left specific endurance is buildable and a 50mi aerobic base is not. The goal time was **not** changed — the athlete chose to keep the 3:30 attempt on Dec 13 after seeing the analysis.
 
 *(Full week-by-week mileage/long-run/focus-text data for all 27 weeks exists in the current artifact code — pull directly from the `PLAN_PHASES` constant rather than retyping; it's the same array used to drive the countdown, current-week detection, and expandable plan UI.)*
 

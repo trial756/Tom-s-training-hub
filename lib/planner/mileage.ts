@@ -2,13 +2,17 @@ import type { PlanDay, PlanSession } from "@/lib/planner/types";
 
 /**
  * How far above recent actual weekly mileage a single week is allowed to
- * reach. The classic ~10% rule, loosened slightly — the point is that the
- * block's target says what the plan wants, while recent volume says what the
- * athlete is currently built for. Prescribing the full gap in one week is
- * how people get hurt, so the reconciler closes what it safely can and
- * reports the rest rather than pretending.
+ * reach.
+ *
+ * Deliberately loose. The athlete has committed to an aggressive nine-week
+ * build toward a fixed race date, and the week targets in marathonPlan.ts
+ * were rewritten to encode that ramp directly (including a cutback week).
+ * A tight ~10% ceiling here would silently veto that plan every week, so
+ * this is set to catch only absurdity — a jump from 12 to 33 in one week —
+ * while letting the planned progression through. It rises on its own as
+ * actual volume rises.
  */
-const PROGRESSION_CEILING = 1.15;
+const PROGRESSION_CEILING = 1.5;
 /** Below this, a shortfall isn't worth restructuring the week over. */
 const MIN_GAP_MILES = 2;
 /** An added easy run won't be longer than this. */
