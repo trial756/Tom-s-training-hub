@@ -3,8 +3,8 @@
 Running state for picking this up in a fresh session. Read `CLAUDE.md` first
 (the project spec); this covers what's true *now* and what isn't finished.
 
-**Last updated:** 2026-10-07 · branch `claude/toms-training-hub-app-oki1z4` ·
-HEAD `4519137` · working tree clean, everything pushed.
+**Last updated:** 2026-10-07 · branches `claude/toms-training-hub-app-oki1z4`
+and `claude/timezone-workout-volume-6nbn8o` · everything pushed.
 
 ---
 
@@ -84,11 +84,24 @@ Press), but nobody has watched a cold `/api/plan` generation.
    twice) and an 8/2 "Easy 5mi" with a 2:36 duration / 14:15 pace — the
    latter is the visible spike in the Pace Trend chart. He knows; deleting
    from History works.
-3. **After Dec 13 the lifting prompt should flip.** It currently tells the
-   planner that lifting serves running and yields when the week is tight —
-   correct for a race build, wrong for an off-season hypertrophy block
-   (he asked whether one exercise per muscle is optimal; it isn't for growth,
-   only for maintenance during this build).
+3. **After Dec 13 the lifting prompt should flip.** The system prompt in
+   `generateWeekPlan` (`lib/anthropic.ts`) says running is the priority and
+   lifting volume yields when the week is tight. That's right for the race
+   build, wrong for an off-season block.
+   - **Now (maintenance):** ~1 movement per region × 3 sets × 2 lift days ≈
+     6 hard sets per muscle per week. Below the ~10–20 sets/week that drives
+     growth, but enough to hold strength, which needs about a third of the
+     volume that building it takes. The Oct 6 session (17 sets: incline bench
+     5, shoulder press 3, cable lateral 3, shrug 3, Pallof 3) was correct.
+     If he wants more, he adds sets to movements already in the session, not
+     new movements, and only upper body. Legs belong to the running.
+   - **After Dec 13 (build):** 2–3 movements per muscle and 10–20 sets per
+     muscle per week. Lifting stops yielding to running, mileage drops, and the
+     runner-friendly leg restriction comes off. Gate it on the race date
+     rather than hand-editing it on the day: the context packet already carries
+     the phase, so add a post-race phase and branch the prompt on it.
+   - Tom raised this himself (he asked whether one exercise per muscle is
+     optimal), so expect him to ask for it once the race is done.
 4. **`week_plans` has no UI for editing a generated session** — he can
    replan the whole week or log off-plan, nothing in between.
 
