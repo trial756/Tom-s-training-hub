@@ -123,6 +123,21 @@ export function shiftDays(d: Date, days: number): Date {
   return midnightOf(y, m, day + days);
 }
 
+/**
+ * Whole calendar days from one YYYY-MM-DD key to another (positive when `to`
+ * is later). Pure calendar math, so it is exact in any zone and across DST —
+ * parsing keys as local midnights and dividing by 24h gives 23/25-hour days
+ * on the clock-change nights, and mixing a machine-local midnight with an
+ * app-zone one is off by the zone gap.
+ */
+export function daysBetweenKeys(from: string, to: string): number {
+  const utc = (key: string) => {
+    const [y, m, d] = key.split("-").map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((utc(to) - utc(from)) / 86400000);
+}
+
 /** Sunday that starts the training week containing `d` (weeks run Sun–Sat). */
 export function startOfWeekSunday(d: Date): Date {
   const [y, m, day] = localDateKey(d).split("-").map(Number);

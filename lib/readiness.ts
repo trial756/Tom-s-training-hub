@@ -1,5 +1,5 @@
 import { buildMarathonPlan, GOAL_PACE_SECONDS_PER_MILE, RACE_DATE } from "@/lib/marathonPlan";
-import { localDateKey, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
+import { daysBetweenKeys, localDateKey, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
 
 /**
  * Hard evidence for whether the 3:30 attempt is on track, checked against
@@ -71,14 +71,12 @@ function statusFor(current: number, target: number, weeksToDeadline: number, pla
 function weeksUntilPlanWeek(weekNumber: number, now: Date): number {
   const week = buildMarathonPlan().find((w) => w.weekNumber === weekNumber);
   if (!week) return 0;
-  const end = new Date(`${week.endDate}T00:00:00`);
-  return Math.max(0, (end.getTime() - now.getTime()) / 86400000 / 7);
+  return Math.max(0, daysBetweenKeys(localDateKey(now), week.endDate) / 7);
 }
 
 export function computeReadiness(runs: ReadinessRun[], today: Date = new Date()): Readiness {
   const now = startOfLocalDay(today);
-  const race = new Date(`${RACE_DATE}T00:00:00`);
-  const daysToRace = Math.max(0, Math.round((race.getTime() - now.getTime()) / 86400000));
+  const daysToRace = Math.max(0, daysBetweenKeys(localDateKey(now), RACE_DATE));
 
   const valid = runs.filter((r) => (Number(r.distance_miles) || 0) > 0);
 

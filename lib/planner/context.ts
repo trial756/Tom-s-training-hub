@@ -1,4 +1,4 @@
-import { localDateKey, normalizeExerciseName, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
+import { daysBetweenKeys, localDateKey, normalizeExerciseName, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
 import { MUSCLE_LABELS, MUSCLE_REGIONS, type MuscleRegion } from "@/lib/muscles";
 import { buildExerciseLookup, computeMuscleActivity, type ExerciseLookup } from "@/lib/muscleCoverage";
 import { buildMarathonPlan, currentWeek, RACE_DATE } from "@/lib/marathonPlan";
@@ -94,7 +94,6 @@ export function buildPlannerContext(opts: {
   // ── Marathon plan position ────────────────────────────────────────────
   const weeks = buildMarathonPlan();
   const active = currentWeek(weeks);
-  const raceDate = new Date(`${RACE_DATE}T00:00:00`);
   const marathon = active
     ? {
         planWeek: active.weekNumber,
@@ -104,7 +103,7 @@ export function buildPlannerContext(opts: {
         focus: active.keyWorkout,
         isRecoveryWeek: active.isRecoveryWeek,
         isRaceWeek: active.isRaceWeek,
-        daysToRace: Math.max(0, Math.round((raceDate.getTime() - today.getTime()) / 86400000)),
+        daysToRace: Math.max(0, daysBetweenKeys(todayKey, RACE_DATE)),
       }
     : null;
 
@@ -164,10 +163,7 @@ export function buildPlannerContext(opts: {
     .sort((a, b) => b.sessions - a.sessions || (b.lastDate ?? "").localeCompare(a.lastDate ?? ""))
     .slice(0, 20);
 
-  const daysRemaining = Math.max(
-    0,
-    Math.round((new Date(`${weekEnd}T00:00:00`).getTime() - new Date(`${todayKey}T00:00:00`).getTime()) / 86400000) + 1
-  );
+  const daysRemaining = Math.max(0, daysBetweenKeys(todayKey, weekEnd) + 1);
 
   return {
     today: todayKey,

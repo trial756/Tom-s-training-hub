@@ -17,7 +17,7 @@ import {
   type PlanPhase,
   type PlanWeek,
 } from "@/lib/marathonPlan";
-import { formatPace, formatShortDate, localDateKey } from "@/lib/format";
+import { daysBetweenKeys, formatPace, formatShortDate, localDateKey } from "@/lib/format";
 import type { Run } from "@/lib/types";
 import ChartFrame from "@/components/charts/ChartFrame";
 import GoalReadiness from "@/components/GoalReadiness";
@@ -93,9 +93,7 @@ export default function MarathonPage() {
   }, [runs]);
 
   const raceDate = new Date(`${RACE_DATE}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const daysToRace = Math.round((raceDate.getTime() - today.getTime()) / 86400000);
+  const daysToRace = daysBetweenKeys(localDateKey(new Date()), RACE_DATE);
 
   function togglePhase(phase: PlanPhase) {
     setExpandedPhases((prev) => {

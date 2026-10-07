@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { localDateKey, normalizeExerciseName, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
+import { APP_TIMEZONE, localDateKey, normalizeExerciseName, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
 
 export const runtime = "nodejs";
 
@@ -20,7 +20,7 @@ interface ExerciseLike {
 }
 
 function shortDate(d: Date): string {
-  return d.toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
+  return d.toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, month: "numeric", day: "numeric" });
 }
 
 export async function GET(req: NextRequest) {
