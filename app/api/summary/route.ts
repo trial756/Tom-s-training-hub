@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { summarizeTraining } from "@/lib/anthropic";
-import { formatPace, localDateKey, startOfLocalDay } from "@/lib/format";
+import { formatPace, localDateKey, shiftDays, startOfLocalDay } from "@/lib/format";
 
 export const runtime = "nodejs";
 
@@ -11,8 +11,8 @@ export async function GET(req: NextRequest) {
     const totalDaysInRange = range === "month" ? 30 : 7;
     const rangeLabel = range === "month" ? "the last 30 days" : "the last 7 days";
 
-    const start = startOfLocalDay(new Date());
-    start.setDate(start.getDate() - (totalDaysInRange - 1));
+    const today = startOfLocalDay(new Date());
+    const start = shiftDays(today, -(totalDaysInRange - 1));
 
     const db = supabaseAdmin();
     const [workoutsRes, runsRes, mealsRes] = await Promise.all([

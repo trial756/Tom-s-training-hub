@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { localDateKey, startOfLocalDay, summarizeExerciseNames } from "@/lib/format";
+import { localDateKey, shiftDays, startOfLocalDay, summarizeExerciseNames } from "@/lib/format";
 
 export const runtime = "nodejs";
 
@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
     const range = req.nextUrl.searchParams.get("range") === "month" ? "month" : "7day";
     const totalDays = range === "month" ? 30 : 7;
 
-    const start = startOfLocalDay(new Date());
-    start.setDate(start.getDate() - (totalDays - 1));
+    const today = startOfLocalDay(new Date());
+    const start = shiftDays(today, -(totalDays - 1));
 
     const db = supabaseAdmin();
     const [workoutsRes, runsRes, mealsRes] = await Promise.all([
@@ -64,8 +64,7 @@ export async function GET(req: NextRequest) {
       { date: string; label: string; workouts: string[]; runs: string[]; meals: string[] }
     >();
     for (let i = 0; i < totalDays; i++) {
-      const d = new Date(start);
-      d.setDate(d.getDate() + i);
+      const d = shiftDays(start, i);
       const key = localDateKey(d);
       dayBuckets.set(key, {
         date: key,

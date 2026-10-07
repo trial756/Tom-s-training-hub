@@ -1,5 +1,5 @@
 // The Sunday-week rule lives in lib/format so there is one definition of it.
-import { startOfWeekSunday } from "@/lib/format";
+import { localDateKey, startOfWeekSunday } from "@/lib/format";
 
 // Static 27-week marathon training plan.
 // Race day: Sunday, December 13, 2026 · Goal: 3:30:00 · Goal pace: 8:01 /mi
@@ -171,7 +171,9 @@ export function phaseSummaries(weeks: PlanWeek[]): PlanPhaseSummary[] {
 }
 
 export function currentWeek(weeks: PlanWeek[]): PlanWeek | null {
-  const today = fmtDate(new Date());
+  // Athlete's timezone, not the machine's — on a UTC server this otherwise
+  // advances the plan week at 7pm Central on a Saturday.
+  const today = localDateKey(new Date());
   return weeks.find((w) => today >= w.startDate && today <= w.endDate) ?? null;
 }
 

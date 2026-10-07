@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateWeekPlan, type GeneratedSession } from "@/lib/anthropic";
-import { localDateKey, normalizeExerciseName, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
+import { localDateKey, normalizeExerciseName, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
 import { cleanRegions } from "@/lib/muscles";
 import { buildExerciseLookup } from "@/lib/muscleCoverage";
 import { buildPlannerContext } from "@/lib/planner/context";
@@ -16,9 +16,8 @@ const HISTORY_DAYS = 60;
 
 function weekDatesFrom(weekStart: string): string[] {
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(`${weekStart}T00:00:00`);
-    d.setDate(d.getDate() + i);
-    return localDateKey(d);
+    const [y, m, day] = weekStart.split("-").map(Number);
+    return localDateKey(shiftDays(new Date(Date.UTC(y, m - 1, day, 12)), i));
   });
 }
 
@@ -63,8 +62,7 @@ async function handle(_req: NextRequest, forceRegenerate: boolean) {
     const weekDates = weekDatesFrom(weekStart);
     const weekEnd = weekDates[6];
 
-    const historyStart = new Date(today);
-    historyStart.setDate(historyStart.getDate() - HISTORY_DAYS);
+    const historyStart = shiftDays(today, -HISTORY_DAYS);
 
     const [workoutsRes, runsRes, lookupRes, storedRes] = await Promise.all([
       db

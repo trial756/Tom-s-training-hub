@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { startOfLocalDay } from "@/lib/format";
+import { shiftDays, startOfLocalDay } from "@/lib/format";
 import { MUSCLE_LABELS, MUSCLE_REGIONS } from "@/lib/muscles";
 import { buildExerciseLookup, computeMuscleActivity } from "@/lib/muscleCoverage";
 
@@ -21,8 +21,7 @@ export async function GET(req: NextRequest) {
     const days = allTime ? 3650 : 7;
 
     const today = startOfLocalDay(new Date());
-    const start = new Date(today);
-    start.setDate(start.getDate() - (days - 1));
+    const start = shiftDays(today, -(days - 1));
 
     const db = supabaseAdmin();
     const [workoutsRes, runsRes, lookupRes] = await Promise.all([

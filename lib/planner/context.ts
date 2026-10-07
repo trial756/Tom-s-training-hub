@@ -1,4 +1,4 @@
-import { localDateKey, normalizeExerciseName, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
+import { localDateKey, normalizeExerciseName, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
 import { MUSCLE_LABELS, MUSCLE_REGIONS, type MuscleRegion } from "@/lib/muscles";
 import { buildExerciseLookup, computeMuscleActivity, type ExerciseLookup } from "@/lib/muscleCoverage";
 import { buildMarathonPlan, currentWeek, RACE_DATE } from "@/lib/marathonPlan";
@@ -37,16 +37,14 @@ export function buildPlannerContext(opts: {
   const today = startOfLocalDay(opts.today ?? new Date());
   const todayKey = localDateKey(today);
   const weekStartDate = startOfWeekSunday(today);
-  const weekEndDate = new Date(weekStartDate);
-  weekEndDate.setDate(weekEndDate.getDate() + 6);
+  const weekEndDate = shiftDays(weekStartDate, 6);
   const weekStart = localDateKey(weekStartDate);
   const weekEnd = localDateKey(weekEndDate);
 
   const lookup: ExerciseLookup = buildExerciseLookup(opts.exerciseMuscles);
 
   // ── Muscle picture over a rolling fortnight ───────────────────────────
-  const windowStart = new Date(today);
-  windowStart.setDate(windowStart.getDate() - 13);
+  const windowStart = shiftDays(today, -13);
   const inWindow = (iso: string) => localDateKey(new Date(iso)) >= localDateKey(windowStart);
 
   const windowWorkouts = opts.workouts.filter((w) => inWindow(w.logged_at));
@@ -111,8 +109,7 @@ export function buildPlannerContext(opts: {
     : null;
 
   // ── Cadence, inferred rather than assumed ─────────────────────────────
-  const cadenceStart = new Date(weekStartDate);
-  cadenceStart.setDate(cadenceStart.getDate() - CADENCE_WEEKS * 7);
+  const cadenceStart = shiftDays(weekStartDate, -CADENCE_WEEKS * 7);
   const cadenceKey = localDateKey(cadenceStart);
   const distinctDays = (rows: { logged_at: string }[]) =>
     new Set(rows.map((r) => localDateKey(new Date(r.logged_at))).filter((d) => d >= cadenceKey && d < weekStart)).size;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { localDateKey, normalizeExerciseName, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
+import { localDateKey, normalizeExerciseName, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
 
 export const runtime = "nodejs";
 
@@ -30,11 +30,9 @@ export async function GET(req: NextRequest) {
 
     const today = startOfLocalDay(new Date());
     const weekStart = startOfWeekSunday(today);
-    const trendStart = new Date(weekStart);
-    trendStart.setDate(trendStart.getDate() - (TREND_WEEKS - 1) * 7);
+    const trendStart = shiftDays(weekStart, -(TREND_WEEKS - 1) * 7);
 
-    const fuelStart = new Date(today);
-    fuelStart.setDate(fuelStart.getDate() - (fuelDays - 1));
+    const fuelStart = shiftDays(today, -(fuelDays - 1));
 
     const db = supabaseAdmin();
     const [runsRes, workoutsRes, mealsRes] = await Promise.all([
@@ -56,8 +54,7 @@ export async function GET(req: NextRequest) {
     const volumeByWeek = new Map<string, number>();
     const weekLabels = new Map<string, string>();
     for (let i = 0; i < TREND_WEEKS; i++) {
-      const d = new Date(trendStart);
-      d.setDate(d.getDate() + i * 7);
+      const d = shiftDays(trendStart, i * 7);
       const key = localDateKey(d);
       weekKeys.push(key);
       mileageByWeek.set(key, 0);
@@ -120,8 +117,7 @@ export async function GET(req: NextRequest) {
     const protein = new Map<string, number>();
     const fuelLabels = new Map<string, string>();
     for (let i = 0; i < fuelDays; i++) {
-      const d = new Date(fuelStart);
-      d.setDate(d.getDate() + i);
+      const d = shiftDays(fuelStart, i);
       const key = localDateKey(d);
       fuelDayKeys.push(key);
       consumed.set(key, 0);

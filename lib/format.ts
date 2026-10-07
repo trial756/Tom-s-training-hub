@@ -56,21 +56,78 @@ export function formatMinutes(totalMinutes: number | null | undefined): string {
   return `${m} min`;
 }
 
-// Local-date helpers (not toISOString() slicing) so day boundaries follow
-// the local calendar rather than rolling over at UTC midnight.
-export function startOfLocalDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+// ── Dates ─────────────────────────────────────────────────────────────
+//
+// Every "what day is it" question resolves in the athlete's own timezone,
+// never the machine's. On Vercel the server runs in UTC, so machine-local
+// date math rolled the app over to tomorrow at 7pm Central — the plan, body
+// map and stats would jump a day mid-evening while the log's date picker
+// (running on the phone) still showed today.
+//
+// Single-tenant app, so the zone is a constant rather than plumbed through
+// every request. Change this one line if the athlete relocates.
+export const APP_TIMEZONE = "America/Chicago";
+
+/** Minutes the zone is ahead of UTC at that instant (handles DST). */
+function tzOffsetMinutes(date: Date, tz: string = APP_TIMEZONE): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const parts = Object.fromEntries(dtf.formatToParts(date).map((p) => [p.type, p.value])) as Record<string, string>;
+  const asUTC = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour) % 24,
+    Number(parts.minute),
+    Number(parts.second)
+  );
+  return (asUTC - date.getTime()) / 60000;
 }
 
+/** Midnight of the given calendar day in the app zone, as a UTC instant. */
+function midnightOf(year: number, month1: number, day: number): Date {
+  const guess = Date.UTC(year, month1 - 1, day, 0, 0, 0);
+  return new Date(guess - tzOffsetMinutes(new Date(guess)) * 60000);
+}
+
+/** YYYY-MM-DD for the instant, as seen in the app's timezone. */
 export function localDateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+export function startOfLocalDay(d: Date): Date {
+  const [y, m, day] = localDateKey(d).split("-").map(Number);
+  return midnightOf(y, m, day);
+}
+
+/**
+ * Shifts by whole calendar days in the app zone. Plain `setDate` arithmetic
+ * drifts an hour across a DST boundary — which Nov 1 lands inside this
+ * training block — and an hour is enough to report the wrong day.
+ */
+export function shiftDays(d: Date, days: number): Date {
+  const [y, m, day] = localDateKey(d).split("-").map(Number);
+  return midnightOf(y, m, day + days);
 }
 
 /** Sunday that starts the training week containing `d` (weeks run Sun–Sat). */
 export function startOfWeekSunday(d: Date): Date {
-  const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  date.setDate(date.getDate() - date.getDay());
-  return date;
+  const [y, m, day] = localDateKey(d).split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
+  return midnightOf(y, m, day - dow);
 }
 
 // Equipment words that get dropped when grouping lifts, because the AI

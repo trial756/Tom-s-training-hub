@@ -1,5 +1,5 @@
 import { buildMarathonPlan, GOAL_PACE_SECONDS_PER_MILE, RACE_DATE } from "@/lib/marathonPlan";
-import { localDateKey, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
+import { localDateKey, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
 
 /**
  * Hard evidence for whether the 3:30 attempt is on track, checked against
@@ -93,8 +93,7 @@ export function computeReadiness(runs: ReadinessRun[], today: Date = new Date())
 
   // 3. Recent weekly volume
   const weekStart = startOfWeekSunday(now);
-  const cutoff = new Date(weekStart);
-  cutoff.setDate(cutoff.getDate() - WEEKS_AVG * 7);
+  const cutoff = shiftDays(weekStart, -WEEKS_AVG * 7);
   const cutoffKey = localDateKey(cutoff);
   const weekStartKey = localDateKey(weekStart);
   const recentMiles = valid
