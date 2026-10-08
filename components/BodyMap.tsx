@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { MuscleRegion } from "@/lib/muscles";
 
 export interface BodyRegionData {
@@ -111,7 +111,7 @@ function Figure({
   );
 }
 
-export default function BodyMap({
+function BodyMap({
   regions,
   window: windowMode,
   onWindowChange,
@@ -191,3 +191,7 @@ export default function BodyMap({
     </div>
   );
 }
+
+// Memoised so plan and stats reloads don't redraw the figure; it re-renders
+// only when its own regions or window actually change.
+export default memo(BodyMap);

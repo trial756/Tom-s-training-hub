@@ -6,6 +6,7 @@ import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
 import type { Run, Workout } from "@/lib/types";
 import { formatDateTime, formatDuration, formatPace, localDateKey, summarizeExerciseNames } from "@/lib/format";
+import { notifyDataChanged } from "@/lib/refresh";
 
 const QUICK_LOG_CHIPS: { label: string; prefill: string }[] = [
   { label: "Chest Day", prefill: "Chest day: " },
@@ -93,6 +94,7 @@ export default function LogPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to log workout.");
       setLastSaved(json.workout);
+      notifyDataChanged("workout");
       setText("");
       setDate(todayISO());
       loadRecent();

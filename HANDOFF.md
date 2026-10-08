@@ -176,6 +176,13 @@ split.
 - Charts: single-series keeps brand accent; 2+ series uses the validated
   colorblind-safe set (amber `#c98100`, blue `#4b9bd4`, magenta `#c364b0`).
   Run the dataviz skill's `validate_palette.js` before adding a new one.
+- **Homepage sections refresh on signals, never on a timer** (`lib/refresh.ts`).
+  Any new write path calls `notifyDataChanged(kind)` after the write lands;
+  any new homepage section registers `useRefreshOn(reload, { kinds })` and
+  reloads *quietly* (keep content on screen, skip the state update when the
+  payload is unchanged). Signals: data written (by kind), midnight Central,
+  and returning to the foreground after 5+ min or across a day change. The
+  AI summary is deliberately excluded — it costs a call.
 - The per-workout coach stays backward-looking (what you just did); the
   planner owns everything forward-looking. Don't let both speak about the
   week or they'll contradict each other on the same screen.

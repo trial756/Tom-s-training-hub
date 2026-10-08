@@ -7,6 +7,7 @@ import Spinner from "@/components/Spinner";
 import UndoToast from "@/components/UndoToast";
 import type { Favorite, Meal } from "@/lib/types";
 import { formatDateTime, localDateKey } from "@/lib/format";
+import { notifyDataChanged } from "@/lib/refresh";
 import { AUTO_FAVORITE_THRESHOLD, normalizeMealKey } from "@/lib/mealFavorites";
 
 const MEAL_TYPE_COLORS: Record<string, string> = {
@@ -118,6 +119,7 @@ export default function FuelPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to log meal.");
       setLastSaved(json.meal);
+      notifyDataChanged("meal");
       setText("");
       setDate(todayISO());
       loadAll();
@@ -163,6 +165,7 @@ export default function FuelPage() {
   async function finalizeDelete(id: string) {
     setPendingDelete((prev) => (prev?.meal.id === id ? null : prev));
     await fetch(`/api/meals/${id}`, { method: "DELETE" });
+    notifyDataChanged("meal");
   }
 
   function undoDelete() {

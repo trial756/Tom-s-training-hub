@@ -7,6 +7,7 @@ import CoachingNote from "@/components/CoachingNote";
 import UndoToast from "@/components/UndoToast";
 import type { Favorite, Meal, Run, Workout } from "@/lib/types";
 import { formatDateTime, formatDuration, formatPace, summarizeExerciseNames } from "@/lib/format";
+import { notifyDataChanged } from "@/lib/refresh";
 import { describeIntervals } from "@/lib/intervals";
 
 type Filter = "all" | "workouts" | "runs" | "meals" | "favorites";
@@ -143,6 +144,9 @@ export default function HistoryPage() {
     setPendingDelete((prev) => (prev?.item.id === id ? null : prev));
     const path = kind === "workout" ? "workouts" : kind === "run" ? "runs" : kind === "meal" ? "meals" : "favorites";
     await fetch(`/api/${path}/${id}`, { method: "DELETE" });
+    // The delete lands 5s after the tap, often after navigating to Today —
+    // this is what tells an already-mounted Today to drop the entry.
+    if (kind !== "favorite") notifyDataChanged(kind);
   }
 
   function undoDelete() {
@@ -162,6 +166,7 @@ export default function HistoryPage() {
     setBusyId(id);
     try {
       await fetch(`/api/favorites/${id}/log`, { method: "POST" });
+      notifyDataChanged("workout");
       await loadAll();
     } finally {
       setBusyId(null);
