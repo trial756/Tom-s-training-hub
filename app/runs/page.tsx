@@ -7,6 +7,7 @@ import Spinner from "@/components/Spinner";
 import type { IntervalSet, Run, RunIntervals } from "@/lib/types";
 import { RUN_TYPES } from "@/lib/types";
 import { formatDateTime, formatDuration, formatPace, localDateKey } from "@/lib/format";
+import { notifyDataChanged } from "@/lib/refresh";
 import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
 import {
   describeIntervals,
@@ -179,6 +180,7 @@ export default function RunsPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to log run.");
       setLastSaved(json.run);
+      notifyDataChanged("run");
       setForm(EMPTY_FORM);
       setRunType("");
       setFeel("");

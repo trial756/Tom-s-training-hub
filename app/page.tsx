@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import StatTile from "@/components/StatTile";
@@ -13,6 +13,7 @@ import TodayPlan from "@/components/TodayPlan";
 import BodyMap, { type BodyRegionData } from "@/components/BodyMap";
 import { daysBetweenKeys, localDateKey } from "@/lib/format";
 import type { WeekPlan } from "@/lib/planner/types";
+import { notifyDataChanged, useRefreshOn } from "@/lib/refresh";
 import BarChart from "@/components/charts/BarChart";
 import GroupedBarChart from "@/components/charts/GroupedBarChart";
 import LineChart from "@/components/charts/LineChart";
@@ -87,16 +88,49 @@ export default function StatsPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
 
+  // Per-section request counters: a reload that lands after a newer one
+  // (say, a range toggle mid-refresh) is dropped rather than overwriting it.
+  const planReq = useRef(0);
+  const bodyReq = useRef(0);
+  const statsReq = useRef(0);
+  // Last payload per section, so a reload that brings back identical data
+  // skips the state update and the section doesn't re-render at all. One key
+  // per section, not per range — the cache must match what's on screen.
+  const lastJson = useRef<Record<string, string>>({});
+  const changed = (key: string, value: unknown) => {
+    const json = JSON.stringify(value);
+    if (lastJson.current[key] === json) return false;
+    lastJson.current[key] = json;
+    return true;
+  };
+
   useEffect(() => {
     loadPlan(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    fetch(`/api/muscle-map?window=${bodyWindow}`)
-      .then((res) => res.json())
-      .then((json) => setBodyRegions(json.error ? null : json.regions))
-      .catch(() => setBodyRegions(null));
+    loadBody(bodyWindow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bodyWindow]);
+
+  // What each section reloads on. Meals only move stats; nothing here
+  // regenerates the AI summary, which costs a call and stays on-demand.
+  useRefreshOn(() => loadPlan(false, true), { kinds: ["workout", "run"] });
+  useRefreshOn(() => loadBody(bodyWindow), { kinds: ["workout", "run"] });
+  useRefreshOn(() => loadStats(range, true), { kinds: ["workout", "run", "meal"] });
+
+  function loadBody(win: "7d" | "all") {
+    const req = ++bodyReq.current;
+    fetch(`/api/muscle-map?window=${win}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (req !== bodyReq.current || json.error) return;
+        if (changed("body", json.regions)) setBodyRegions(json.regions);
+      })
+      // A failed background reload keeps the map that's already showing.
+      .catch(() => {});
+  }
 
   useEffect(() => {
     loadStats(range);
@@ -105,42 +139,80 @@ export default function StatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
-  async function loadPlan(force: boolean) {
+  // The day the plan was last loaded for, so a reload after midnight can
+  // tell whether the selected day was "today" and should follow it forward.
+  const planDay = useRef(localDateKey(new Date()));
+
+  /**
+   * `quiet` is a background reload: the current plan stays on screen, a
+   * failure keeps it rather than showing an error, and the selected day is
+   * left alone unless it was today and the day has since rolled over.
+   */
+  async function loadPlan(force: boolean, quiet = false) {
+    const req = ++planReq.current;
     if (force) setRegenerating(true);
-    else setPlanLoading(true);
-    setPlanError(null);
+    else if (!quiet || !plan) setPlanLoading(true);
+    if (!quiet) setPlanError(null);
     try {
-      const res = await fetch(force ? "/api/plan" : "/api/plan", force ? { method: "POST" } : undefined);
+      const res = await fetch("/api/plan", force ? { method: "POST" } : undefined);
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? "Could not build this week's plan.");
-      setPlan(json.plan);
-      setPlanContext(json.context ?? null);
-      setMileageNote(json.mileage?.note ?? null);
+      if (req !== planReq.current) return;
+      // generatedAt is stamped per request, so it's left out of the comparison.
+      const { generatedAt: _stamp, ...planBody } = json.plan ?? {};
+      if (changed("plan", { planBody, context: json.context, mileage: json.mileage })) {
+        setPlan(json.plan);
+        setPlanContext(json.context ?? null);
+        setMileageNote(json.mileage?.note ?? null);
+      }
       const todayKey = localDateKey(new Date());
-      if (json.plan?.days?.some((d: { date: string }) => d.date === todayKey)) setSelectedDate(todayKey);
+      const hasToday = json.plan?.days?.some((d: { date: string }) => d.date === todayKey);
+      const previousDay = planDay.current;
+      planDay.current = todayKey;
+      setSelectedDate((current) => {
+        if (!quiet) return hasToday ? todayKey : current;
+        const followsToday = current === previousDay && previousDay !== todayKey;
+        const stillInPlan = json.plan?.days?.some((d: { date: string }) => d.date === current);
+        if ((followsToday || !stillInPlan) && hasToday) return todayKey;
+        return current;
+      });
+      setPlanError(null);
     } catch (err) {
-      setPlanError(err instanceof Error ? err.message : "Something went wrong.");
+      if (req !== planReq.current) return;
+      if (!quiet || !plan) setPlanError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
-      setPlanLoading(false);
-      setRegenerating(false);
+      if (req === planReq.current) {
+        setPlanLoading(false);
+        setRegenerating(false);
+      }
     }
   }
 
-  function loadStats(r: Range) {
-    setLoading(true);
-    setError(null);
+  /** `quiet` keeps the current stats on screen instead of a spinner. */
+  function loadStats(r: Range, quiet = false) {
+    const req = ++statsReq.current;
+    if (!quiet || !stats) setLoading(true);
+    if (!quiet) setError(null);
     Promise.all([
       fetch(`/api/stats?range=${r}`).then((res) => res.json()),
       fetch(`/api/trends?range=${r}`).then((res) => res.json()),
     ])
       .then(([statsJson, trendsJson]) => {
+        if (req !== statsReq.current) return;
         if (statsJson.error) throw new Error(statsJson.error);
-        setStats(statsJson);
+        if (changed("stats", statsJson)) setStats(statsJson);
         // Charts are secondary — a trends failure shouldn't blank the page.
-        setTrends(trendsJson.error ? null : trendsJson);
+        const nextTrends = trendsJson.error ? null : trendsJson;
+        if (changed("trends", nextTrends)) setTrends(nextTrends);
+        setError(null);
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (req !== statsReq.current) return;
+        if (!quiet || !stats) setError(err.message);
+      })
+      .finally(() => {
+        if (req === statsReq.current) setLoading(false);
+      });
   }
 
   async function generateSummary() {
@@ -192,7 +264,8 @@ export default function StatsPage() {
         .join(", ");
       setImportResult(`Restored: ${counts}`);
       setImportText("");
-      loadStats(range);
+      // A restore can touch every table — let every section catch up.
+      notifyDataChanged();
     } catch (err) {
       setImportResult(err instanceof Error ? `Error: ${err.message}` : "Restore failed.");
     } finally {
