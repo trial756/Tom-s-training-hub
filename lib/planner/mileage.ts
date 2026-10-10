@@ -50,7 +50,10 @@ export function reconcileMileage(opts: {
   typicalRunMiles: number;
 }): MileageOutcome {
   const { days, today, milesThisWeek, weeklyTarget, avgWeeklyMiles, typicalRunMiles } = opts;
-  const sessions = opts.sessions.map((s) => ({ ...s }));
+  // Stored weeks could already hold duplicate ids (see the reuse below);
+  // keep the first so a duplicate can't be scheduled onto a second day.
+  const seen = new Set<string>();
+  const sessions = opts.sessions.filter((s) => !seen.has(s.id) && !!seen.add(s.id)).map((s) => ({ ...s }));
   const byId = new Map(sessions.map((s) => [s.id, s]));
 
   if (!weeklyTarget || weeklyTarget <= 0) {
@@ -107,8 +110,14 @@ export function reconcileMileage(opts: {
     const session = day.sessionId ? byId.get(day.sessionId) : undefined;
     if (session && session.kind !== "rest" && session.kind !== "active_recovery") continue;
     const miles = Math.min(remaining, runSize);
+    const id = `add-${day.date}`;
+    // A run added for this date on an earlier load may have been moved
+    // elsewhere by the scheduler. Reuse it: pushing a second session with the
+    // same id is how a week grew five copies of one catch-up run.
+    const prior = sessions.findIndex((s) => s.id === id);
+    if (prior >= 0) sessions.splice(prior, 1);
     const addition: PlanSession = {
-      id: `add-${day.date}`,
+      id,
       kind: "run",
       title: `Easy ${Math.round(miles * 10) / 10}mi`,
       rationale: `Added to close this week's mileage — ${Math.round((weekTarget - milesThisWeek) * 10) / 10}mi still to run.`,

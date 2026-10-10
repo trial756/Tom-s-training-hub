@@ -44,6 +44,8 @@ export type PlanDayStatus = "upcoming" | "today" | "done" | "off_script" | "miss
 
 export interface PlanDay {
   date: string; // local date key
+  /** Sunday of the training week this day belongs to. Set when days from several weeks share a strip. */
+  weekStart?: string;
   sessionId: string | null;
   /** Running the marathon plan asks for on this day, if any. */
   runNote: string | null;
@@ -53,7 +55,27 @@ export interface PlanDay {
   loggedSummary: string | null;
 }
 
+/** One training week touched by the day strip. */
+export interface PlanWeekMeta {
+  weekStart: string;
+  weekEnd: string;
+  planWeek: number | null;
+  phase: string | null;
+  headline: string;
+  weeklyMileage: number | null;
+  /** A future week with no plan yet — the client asks for it separately. */
+  pending: boolean;
+}
+
+/**
+ * The current week's plan, plus an 11-day strip centred on today that can
+ * reach into the previous and next weeks. `days` is the strip; `sessions`
+ * covers every week it touches, with ids prefixed by week ("2026-10-11:s3")
+ * so weeks can't collide.
+ */
 export interface WeekPlan {
+  /** Today's date key — today's status is "done" once it's logged, so it can't be found by status. */
+  today: string;
   weekStart: string;
   weekEnd: string;
   planWeek: number | null;
@@ -61,6 +83,7 @@ export interface WeekPlan {
   headline: string;
   sessions: PlanSession[];
   days: PlanDay[];
+  weeks: PlanWeekMeta[];
   generatedAt: string;
 }
 
@@ -113,4 +136,9 @@ export interface PlannerContext {
   /** Typical single-run distance, used when sizing an added run. */
   typicalRunMiles: number;
   anchors: LiftAnchor[];
+  /** Set when planning a week ahead: what the current week still has scheduled. */
+  plannedBeforeWeek?: {
+    note: string;
+    sessions: { date: string; title: string; kind: PlanDayKind; regions: MuscleRegion[] }[];
+  };
 }

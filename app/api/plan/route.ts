@@ -7,7 +7,10 @@ import { buildExerciseLookup } from "@/lib/muscleCoverage";
 import { buildPlannerContext } from "@/lib/planner/context";
 import { scheduleWeek, type DayLog } from "@/lib/planner/schedule";
 import { reconcileMileage } from "@/lib/planner/mileage";
-import type { PlanSession, WeekPlan } from "@/lib/planner/types";
+import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
+import { buildMarathonPlan, currentWeek } from "@/lib/marathonPlan";
+
+const marathonWeeks = buildMarathonPlan();
 
 export const runtime = "nodejs";
 
@@ -44,16 +47,40 @@ function toSessions(generated: GeneratedSession[]): PlanSession[] {
   }));
 }
 
+/** Days either side of today in the strip — 11 days with today in the middle. */
+const STRIP_RADIUS = 5;
+
+/** A date key as an instant safely inside that day in the app zone. */
+function keyToDate(key: string): Date {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 18));
+}
+
+type StoredWeek = {
+  week_start: string;
+  sessions: PlanSession[];
+  assignments: Record<string, string>;
+  headline: string | null;
+};
+
 export async function GET(req: NextRequest) {
-  return handle(req, req.nextUrl.searchParams.get("regenerate") === "1");
+  return handle({ regenerate: req.nextUrl.searchParams.get("regenerate") === "1" ? "current" : null, ensure: null });
 }
 
-/** Forces a fresh generation for the current week. */
+/**
+ * `?week=YYYY-MM-DD` regenerates that week (current or future). With
+ * `&ensure=1` it only generates when the week has no plan yet — how the
+ * client fills in next week without ever paying for two AI calls in one
+ * request. No `week` means the current week, as before.
+ */
 export async function POST(req: NextRequest) {
-  return handle(req, true);
+  const week = req.nextUrl.searchParams.get("week");
+  const ensure = req.nextUrl.searchParams.get("ensure") === "1";
+  const target = week && /^\d{4}-\d{2}-\d{2}$/.test(week) ? week : "current";
+  return ensure ? handle({ regenerate: null, ensure: target }) : handle({ regenerate: target, ensure: null });
 }
 
-async function handle(_req: NextRequest, forceRegenerate: boolean) {
+async function handle(opts: { regenerate: string | null; ensure: string | null }) {
   try {
     const db = supabaseAdmin();
     const today = startOfLocalDay(new Date());
@@ -61,6 +88,15 @@ async function handle(_req: NextRequest, forceRegenerate: boolean) {
     const weekStart = localDateKey(startOfWeekSunday(today));
     const weekDates = weekDatesFrom(weekStart);
     const weekEnd = weekDates[6];
+    const resolve = (w: string | null) => (w === "current" ? weekStart : w);
+    const regenerateWeek = resolve(opts.regenerate);
+    const ensureWeek = resolve(opts.ensure);
+
+    // The strip, and every training week it touches (two, or three midweek).
+    const stripDates = Array.from({ length: STRIP_RADIUS * 2 + 1 }, (_, i) =>
+      localDateKey(shiftDays(today, i - STRIP_RADIUS))
+    );
+    const stripWeeks = Array.from(new Set(stripDates.map((d) => localDateKey(startOfWeekSunday(keyToDate(d))))));
 
     const historyStart = shiftDays(today, -HISTORY_DAYS);
 
@@ -76,33 +112,39 @@ async function handle(_req: NextRequest, forceRegenerate: boolean) {
         .gte("logged_at", historyStart.toISOString())
         .order("logged_at", { ascending: false }),
       db.from("exercise_muscles").select("key, primary_muscles, secondary_muscles"),
-      db.from("week_plans").select("*").eq("week_start", weekStart).maybeSingle(),
+      db.from("week_plans").select("week_start, sessions, assignments, headline").in("week_start", stripWeeks),
     ]);
 
-    const err = workoutsRes.error || runsRes.error || lookupRes.error;
+    const err = workoutsRes.error || runsRes.error || lookupRes.error || storedRes.error;
     if (err) return NextResponse.json({ error: err.message }, { status: 500 });
 
     const workouts = workoutsRes.data ?? [];
     const runs = runsRes.data ?? [];
     const lookup = buildExerciseLookup(lookupRes.data ?? []);
+    // Duplicate session ids (an old mileage-reconciler bug) are dropped on read.
+    const uniqueSessions = (list: PlanSession[]) => {
+      const seen = new Set<string>();
+      return (list ?? []).filter((s) => !seen.has(s.id) && !!seen.add(s.id));
+    };
+    const storedByWeek = new Map(
+      ((storedRes.data ?? []) as StoredWeek[]).map((row) => [row.week_start, { ...row, sessions: uniqueSessions(row.sessions) }])
+    );
 
-    const context = buildPlannerContext({
-      workouts,
-      runs,
-      exerciseMuscles: lookupRes.data ?? [],
-      today,
-    });
+    const contextFor = (week: string, plannedBeforeWeek?: Parameters<typeof buildPlannerContext>[0]["plannedBeforeWeek"]) =>
+      buildPlannerContext({
+        workouts,
+        runs,
+        exerciseMuscles: lookupRes.data ?? [],
+        today,
+        weekOf: week === weekStart ? undefined : keyToDate(week),
+        plannedBeforeWeek,
+      });
 
-    // ── The week's sessions: stored, or generated once ──────────────────
-    let stored = storedRes.data as
-      | { sessions: PlanSession[]; assignments: Record<string, string>; headline: string | null }
-      | null;
-
-    if (!stored || forceRegenerate) {
+    async function generate(week: string, context: ReturnType<typeof buildPlannerContext>): Promise<StoredWeek> {
       const generated = await generateWeekPlan(JSON.stringify(context, null, 2));
       const sessions = toSessions(generated.sessions ?? []);
       const row = {
-        week_start: weekStart,
+        week_start: week,
         plan_week: context.marathon?.planWeek ?? null,
         phase: context.marathon?.phase ?? null,
         headline: generated.headline,
@@ -113,13 +155,31 @@ async function handle(_req: NextRequest, forceRegenerate: boolean) {
         updated_at: new Date().toISOString(),
       };
       const { error: upsertError } = await db.from("week_plans").upsert(row, { onConflict: "week_start" });
-      if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 });
-      stored = { sessions, assignments: {}, headline: generated.headline };
+      if (upsertError) throw new Error(upsertError.message);
+      const stored = { week_start: week, sessions, assignments: {}, headline: generated.headline };
+      storedByWeek.set(week, stored);
+      return stored;
     }
 
-    // ── What actually happened, per day ─────────────────────────────────
+    /** Saves where each session landed, so placement stays stable between loads. */
+    async function persistPlacement(week: string, sessions: PlanSession[], days: PlanDay[]) {
+      const assignments: Record<string, string> = {};
+      for (const day of days) {
+        if (day.sessionId && (day.status === "done" || day.status === "today" || day.status === "upcoming")) {
+          assignments[day.sessionId] = day.date;
+        }
+      }
+      await db
+        .from("week_plans")
+        .update({ sessions, assignments, updated_at: new Date().toISOString() })
+        .eq("week_start", week);
+    }
+
+    // ── What actually happened, per day (every day of every touched week) ──
     const logs: Record<string, DayLog> = {};
-    for (const date of weekDates) logs[date] = { hasWorkout: false, hasRun: false, summary: "", regions: [] };
+    for (const week of stripWeeks) {
+      for (const date of weekDatesFrom(week)) logs[date] = { hasWorkout: false, hasRun: false, summary: "", regions: [] };
+    }
 
     for (const workout of workouts) {
       const date = localDateKey(new Date(workout.logged_at));
@@ -148,19 +208,22 @@ async function handle(_req: NextRequest, forceRegenerate: boolean) {
       };
     }
 
-    // ── Place sessions, then persist the placement so it stays stable ───
-    const initialSessions = [...(stored.sessions ?? [])];
+    // ── Current week: stored, or generated once, then placed ────────────
+    const context = contextFor(weekStart);
+    let current = storedByWeek.get(weekStart);
+    if (!current || regenerateWeek === weekStart) current = await generate(weekStart, context);
+
     const scheduled = scheduleWeek({
-      sessions: initialSessions,
+      sessions: [...(current.sessions ?? [])],
       weekDates,
       today: todayKey,
       logs,
-      priorAssignments: stored.assignments ?? {},
+      priorAssignments: current.assignments ?? {},
     });
 
     // Falling behind shouldn't just reshuffle — the miles have to reappear.
     const reconciled = reconcileMileage({
-      sessions: initialSessions,
+      sessions: [...(current.sessions ?? [])],
       days: scheduled,
       today: todayKey,
       milesThisWeek: context.milesThisWeek,
@@ -168,29 +231,122 @@ async function handle(_req: NextRequest, forceRegenerate: boolean) {
       avgWeeklyMiles: context.avgWeeklyMiles,
       typicalRunMiles: context.typicalRunMiles,
     });
-    const sessions = reconciled.sessions;
-    const days = reconciled.days;
 
-    const assignments: Record<string, string> = {};
-    for (const day of days) {
-      if (day.sessionId && (day.status === "done" || day.status === "today" || day.status === "upcoming")) {
-        assignments[day.sessionId] = day.date;
+    await persistPlacement(weekStart, reconciled.sessions, reconciled.days);
+
+    // ── The other weeks the strip touches ───────────────────────────────
+    type WeekResult = { meta: PlanWeekMeta; sessions: PlanSession[]; days: PlanDay[] };
+    const results: WeekResult[] = [];
+
+    for (const week of stripWeeks) {
+      const dates = weekDatesFrom(week);
+      const marathon = currentWeek(marathonWeeks, week);
+      const baseMeta = {
+        weekStart: week,
+        weekEnd: dates[6],
+        planWeek: marathon?.weekNumber ?? null,
+        phase: marathon?.phase ?? null,
+        weeklyMileage: marathon?.weeklyMileage ?? null,
+      };
+
+      if (week === weekStart) {
+        results.push({
+          meta: { ...baseMeta, headline: current.headline ?? "", pending: false },
+          sessions: reconciled.sessions,
+          days: reconciled.days,
+        });
+        continue;
       }
+
+      let stored = storedByWeek.get(week);
+
+      if (week < weekStart) {
+        // The past is read-only: show what was planned and what got logged.
+        const days: PlanDay[] = stored
+          ? scheduleWeek({
+              sessions: [...(stored.sessions ?? [])],
+              weekDates: dates,
+              today: todayKey,
+              logs,
+              priorAssignments: stored.assignments ?? {},
+            })
+          : dates.map((date) => {
+              const log = logs[date];
+              const logged = !!log && (log.hasWorkout || log.hasRun);
+              return {
+                date,
+                sessionId: null,
+                runNote: null,
+                isKeyRunDay: false,
+                status: logged ? "done" : "missed",
+                loggedSummary: logged ? log.summary : null,
+              };
+            });
+        results.push({ meta: { ...baseMeta, headline: stored?.headline ?? "", pending: false }, sessions: stored?.sessions ?? [], days });
+        continue;
+      }
+
+      // A future week. Its planner hears what the current week still has
+      // scheduled, so a Thursday leg day isn't followed by a Sunday one.
+      const stillPlanned = reconciled.days
+        .filter((d) => d.date >= todayKey && d.status !== "done" && d.sessionId)
+        .map((d) => {
+          const s = reconciled.sessions.find((x) => x.id === d.sessionId)!;
+          return { date: d.date, title: s.title, kind: s.kind, regions: s.regions };
+        });
+      const futureContext = contextFor(week, stillPlanned);
+
+      if (!stored && ensureWeek !== week && regenerateWeek !== week) {
+        // Not generated inline — one AI call per request. The client sees
+        // `pending` and asks for this week on its own.
+        results.push({
+          meta: { ...baseMeta, headline: "", pending: true },
+          sessions: [],
+          days: dates.map((date) => ({ date, sessionId: null, runNote: null, isKeyRunDay: false, status: "upcoming", loggedSummary: null })),
+        });
+        continue;
+      }
+      if (!stored || regenerateWeek === week) stored = await generate(week, futureContext);
+
+      // Placed as if the week started now, then every day reads as upcoming.
+      const placed = scheduleWeek({
+        sessions: [...(stored.sessions ?? [])],
+        weekDates: dates,
+        today: week,
+        logs,
+        priorAssignments: stored.assignments ?? {},
+      });
+      const futureReconciled = reconcileMileage({
+        sessions: [...(stored.sessions ?? [])],
+        days: placed,
+        today: week,
+        milesThisWeek: 0,
+        weeklyTarget: futureContext.marathon?.weeklyMileage ?? null,
+        avgWeeklyMiles: futureContext.avgWeeklyMiles,
+        typicalRunMiles: futureContext.typicalRunMiles,
+      });
+      const days = futureReconciled.days.map((d) => ({ ...d, status: "upcoming" as const }));
+      await persistPlacement(week, futureReconciled.sessions, days);
+      results.push({ meta: { ...baseMeta, headline: stored.headline ?? "", pending: false }, sessions: futureReconciled.sessions, days });
     }
 
-    await db
-      .from("week_plans")
-      .update({ sessions, assignments, updated_at: new Date().toISOString() })
-      .eq("week_start", weekStart);
+    // ── Stitch the strip together ───────────────────────────────────────
+    const stripSet = new Set(stripDates);
+    const prefixed = (week: string, id: string | null) => (id ? `${week}:${id}` : null);
 
     const plan: WeekPlan = {
+      today: todayKey,
       weekStart,
       weekEnd,
       planWeek: context.marathon?.planWeek ?? null,
       phase: context.marathon?.phase ?? null,
-      headline: stored.headline ?? "",
-      sessions,
-      days,
+      headline: current.headline ?? "",
+      sessions: results.flatMap((r) => r.sessions.map((s) => ({ ...s, id: prefixed(r.meta.weekStart, s.id)! }))),
+      days: results
+        .flatMap((r) => r.days.map((d) => ({ ...d, weekStart: r.meta.weekStart, sessionId: prefixed(r.meta.weekStart, d.sessionId) })))
+        .filter((d) => stripSet.has(d.date))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      weeks: results.map((r) => r.meta),
       generatedAt: new Date().toISOString(),
     };
 

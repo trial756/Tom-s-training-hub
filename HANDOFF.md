@@ -47,6 +47,16 @@ tracker, and the timezone fix.
   The scheduler only *moves* sessions; the reconciler *creates* them when the
   week is short. `PROGRESSION_CEILING = 1.5` — at the original 1.15 it vetoed
   the planned build every week.
+- **The day strip spans weeks.** `/api/plan` returns 11 days centred on
+  today across every training week they touch, with session ids prefixed
+  by week (`2026-10-11:s3`). Past weeks are read-only. A future week is
+  never generated inline: GET marks it `pending` and the client POSTs
+  `?week=…&ensure=1`, so no request waits on two AI calls. Its context
+  (`weekOf`) carries the current week's remaining sessions as
+  `plannedBeforeWeek`, so it doesn't repeat Thursday's legs on Sunday.
+- **Mileage reconciler reuses `add-<date>` sessions.** It used to push a
+  duplicate on every reload once the scheduler moved the first; week 18 had
+  five copies. Duplicates are also dropped on read.
 - **Muscle tags live in a lookup keyed by normalized exercise name**, not on
   each workout, so one correction fixes all history. 59 keys hand-seeded
   covering his entire back catalogue; the parser files new exercises itself

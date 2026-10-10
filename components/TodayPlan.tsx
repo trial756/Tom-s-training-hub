@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { MUSCLE_LABELS, type MuscleRegion } from "@/lib/muscles";
 import type { PlanDay, PlanSession, WeekPlan } from "@/lib/planner/types";
@@ -42,6 +43,7 @@ export default function TodayPlan({
   weeklyMileage,
   onRegenerate,
   regenerating,
+  planningWeek,
   selectedDate,
   onSelectDate,
   mileageNote,
@@ -50,58 +52,109 @@ export default function TodayPlan({
   milesThisWeek: number;
   weeklyMileage: number | null;
   mileageNote?: string | null;
-  onRegenerate: () => void;
+  onRegenerate: (weekStart: string) => void;
   regenerating: boolean;
+  /** A future week currently being planned, if any. */
+  planningWeek?: string | null;
   selectedDate: string;
   onSelectDate: (date: string) => void;
 }) {
   const byId = new Map(plan.sessions.map((s) => [s.id, s]));
   const selected = plan.days.find((d) => d.date === selectedDate) ?? plan.days[0];
   const session = selected?.sessionId ? byId.get(selected.sessionId) : undefined;
-  const isToday = plan.days.find((d) => d.status === "today")?.date === selected?.date;
+  // From the plan, not a day's status: once today is logged its status is "done".
+  const todayKey = plan.today ?? plan.days.find((d) => d.status === "today")?.date ?? null;
+  const isToday = todayKey === selected?.date;
+
+  // The header follows whichever training week the selected day sits in.
+  const weeks = plan.weeks ?? [];
+  const selectedWeekStart = selected?.weekStart ?? plan.weekStart;
+  const week = weeks.find((w) => w.weekStart === selectedWeekStart);
+  const isCurrentWeek = selectedWeekStart === plan.weekStart;
+  const isPastWeek = selectedWeekStart < plan.weekStart;
+  const planWeek = week?.planWeek ?? plan.planWeek;
+  const phase = week?.phase ?? plan.phase;
+  const headline = isCurrentWeek ? plan.headline : week?.headline ?? "";
+  const pending = !!week?.pending;
+  const isFuture = todayKey != null && (selected?.date ?? "") > todayKey;
+
+  // Strip grouped by training week, so the Sunday boundary is visible.
+  const groups = weeks
+    .map((w) => ({ week: w, days: plan.days.filter((d) => d.weekStart === w.weekStart) }))
+    .filter((g) => g.days.length > 0);
+  if (groups.length === 0) groups.push({ week: undefined as never, days: plan.days });
+
+  // Centre today in the strip — on first render and when the day rolls over,
+  // not on every quiet reload, so a strip the user has scrolled stays put.
+  const stripRef = useRef<HTMLDivElement>(null);
+  const todayRef = useRef<HTMLButtonElement>(null);
+  const firstDay = plan.days[0]?.date;
+  useEffect(() => {
+    const strip = stripRef.current;
+    const btn = todayRef.current;
+    if (!strip || !btn) return;
+    strip.scrollLeft = btn.offsetLeft - strip.clientWidth / 2 + btn.clientWidth / 2;
+  }, [firstDay]);
 
   return (
     <div className="px-4">
-      {/* Marathon position */}
-      {plan.planWeek != null && (
+      {/* Marathon position for the selected day's week */}
+      {planWeek != null && (
         <div className="mb-3 flex items-center justify-between text-xs">
           <span className="text-muted">
-            Week {plan.planWeek} · {plan.phase}
+            Week {planWeek} · {phase}
+            {!isCurrentWeek && <span className="text-faint">{isPastWeek ? " · last week" : " · next week"}</span>}
           </span>
-          {weeklyMileage != null && (
+          {isCurrentWeek && weeklyMileage != null && (
             <span className="text-muted">
               {milesThisWeek} / {weeklyMileage} mi
             </span>
           )}
+          {!isCurrentWeek && week?.weeklyMileage != null && <span className="text-muted">{week.weeklyMileage} mi target</span>}
         </div>
       )}
 
-      {plan.headline && <p className="mb-2 text-sm font-semibold text-ink">{plan.headline}</p>}
+      {headline && <p className="mb-2 text-sm font-semibold text-ink">{headline}</p>}
 
-      {mileageNote && (
+      {isCurrentWeek && mileageNote && (
         <p className="mb-3 rounded-lg border border-run/25 bg-run/10 p-2 text-xs leading-snug text-gray-300">
           {mileageNote}
         </p>
       )}
 
-      {/* Week strip */}
-      <div className="mb-4 flex gap-1.5">
-        {plan.days.map((day) => {
-          const d = new Date(`${day.date}T00:00:00`);
-          const active = day.date === selected?.date;
-          return (
-            <button
-              key={day.date}
-              onClick={() => onSelectDate(day.date)}
-              className={`flex-1 rounded-xl border py-2 text-center transition-colors ${
-                STATUS_STYLE[day.status] ?? STATUS_STYLE.upcoming
-              } ${active ? "ring-2 ring-accent/60" : ""}`}
-            >
-              <span className="block text-[10px] font-medium opacity-70">{DOW[d.getDay()]}</span>
-              <span className="block text-sm font-bold">{d.getDate()}</span>
-            </button>
-          );
-        })}
+      {/* 11-day strip, today in the middle. Scrolls sideways — eleven 44px
+          targets don't fit a phone, and shrinking them below that costs taps. */}
+      <div
+        ref={stripRef}
+        className="-mx-4 mb-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {groups.map(({ week: w, days }) => (
+          <div key={w?.weekStart ?? "all"} className="shrink-0">
+            <p className="mb-1 text-[10px] uppercase tracking-wide text-faint">
+              {w?.planWeek != null ? `Wk ${w.planWeek}` : "\u00a0"}
+            </p>
+            <div className="flex gap-1.5">
+              {days.map((day) => {
+                const d = new Date(`${day.date}T00:00:00`);
+                const active = day.date === selected?.date;
+                const isTodayBtn = day.date === todayKey;
+                return (
+                  <button
+                    key={day.date}
+                    ref={isTodayBtn ? todayRef : undefined}
+                    onClick={() => onSelectDate(day.date)}
+                    className={`w-11 shrink-0 snap-center rounded-xl border py-2 text-center transition-colors ${
+                      STATUS_STYLE[day.status] ?? STATUS_STYLE.upcoming
+                    } ${active ? "ring-2 ring-accent/60" : ""}`}
+                  >
+                    <span className="block text-[10px] font-medium opacity-70">{DOW[d.getDay()]}</span>
+                    <span className="block text-sm font-bold">{d.getDate()}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Selected day */}
@@ -111,7 +164,14 @@ export default function TodayPlan({
             <p className="text-[11px] uppercase tracking-wide text-faint">
               {isToday ? "Today" : dayName(selected?.date ?? "")}
             </p>
-            <h2 className="text-lg font-bold text-ink">{session?.title ?? "Nothing planned"}</h2>
+            <h2 className="text-lg font-bold text-ink">
+              {session?.title ??
+                (pending
+                  ? planningWeek === selectedWeekStart
+                    ? `Planning week ${planWeek ?? ""}…`
+                    : "Next week's plan is on its way"
+                  : "Nothing planned")}
+            </h2>
             {session?.addedByReconciler && (
               <span className="text-[11px] font-medium text-run">added to close the week&apos;s mileage</span>
             )}
@@ -124,7 +184,7 @@ export default function TodayPlan({
             You trained something else — this moved to a later day.
           </p>
         )}
-        {selected?.status === "missed" && (
+        {selected?.status === "missed" && session && (
           <p className="mb-2 rounded-lg bg-base-800 p-2 text-xs text-faint">Missed — picked up later in the week.</p>
         )}
         {selected?.loggedSummary && (
@@ -164,7 +224,7 @@ export default function TodayPlan({
         )}
 
         <div className="mt-3 flex gap-2">
-          {session && session.kind !== "rest" && selected?.status !== "done" && (
+          {session && session.kind !== "rest" && selected?.status !== "done" && !isFuture && (
             <Link
               href={
                 session.kind === "run"
@@ -176,9 +236,16 @@ export default function TodayPlan({
               Log this
             </Link>
           )}
-          <button onClick={onRegenerate} disabled={regenerating} className="btn-secondary text-sm disabled:opacity-40">
-            {regenerating ? "Replanning…" : "Replan week"}
-          </button>
+          {/* The past is fixed; a future week can be replanned like this one. */}
+          {!isPastWeek && !pending && (
+            <button
+              onClick={() => onRegenerate(selectedWeekStart)}
+              disabled={regenerating}
+              className="btn-secondary text-sm disabled:opacity-40"
+            >
+              {regenerating ? "Replanning…" : isCurrentWeek ? "Replan week" : `Replan week ${planWeek ?? ""}`}
+            </button>
+          )}
         </div>
       </div>
     </div>

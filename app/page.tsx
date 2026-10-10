@@ -142,19 +142,24 @@ export default function StatsPage() {
   // The day the plan was last loaded for, so a reload after midnight can
   // tell whether the selected day was "today" and should follow it forward.
   const planDay = useRef(localDateKey(new Date()));
+  const ensuring = useRef(new Set<string>());
+  const [planningWeek, setPlanningWeek] = useState<string | null>(null);
 
   /**
    * `quiet` is a background reload: the current plan stays on screen, a
    * failure keeps it rather than showing an error, and the selected day is
    * left alone unless it was today and the day has since rolled over.
    */
-  async function loadPlan(force: boolean, quiet = false) {
+  async function loadPlan(force: boolean, quiet = false, week?: string) {
     const req = ++planReq.current;
     if (force) setRegenerating(true);
     else if (!quiet || !plan) setPlanLoading(true);
     if (!quiet) setPlanError(null);
     try {
-      const res = await fetch("/api/plan", force ? { method: "POST" } : undefined);
+      const res = await fetch(
+        force && week ? `/api/plan?week=${week}` : "/api/plan",
+        force ? { method: "POST" } : undefined
+      );
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? "Could not build this week's plan.");
       if (req !== planReq.current) return;
@@ -177,6 +182,8 @@ export default function StatsPage() {
         return current;
       });
       setPlanError(null);
+      const pending = (json.plan?.weeks ?? []).find((w: { pending: boolean }) => w.pending);
+      if (pending) void ensureWeek(pending.weekStart);
     } catch (err) {
       if (req !== planReq.current) return;
       if (!quiet || !plan) setPlanError(err instanceof Error ? err.message : "Something went wrong.");
@@ -185,6 +192,27 @@ export default function StatsPage() {
         setPlanLoading(false);
         setRegenerating(false);
       }
+    }
+  }
+
+  /**
+   * Next week reaches the strip before it starts, and gets planned in its own
+   * request so no single request waits on two AI calls. Once it lands, a
+   * quiet reload picks it up from storage. One attempt per week per visit;
+   * a failure clears the flag so the next refresh signal retries.
+   */
+  async function ensureWeek(week: string) {
+    if (ensuring.current.has(week)) return;
+    ensuring.current.add(week);
+    setPlanningWeek(week);
+    try {
+      const res = await fetch(`/api/plan?week=${week}&ensure=1`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      await loadPlan(false, true);
+    } catch {
+      ensuring.current.delete(week);
+    } finally {
+      setPlanningWeek((cur) => (cur === week ? null : cur));
     }
   }
 
@@ -289,7 +317,7 @@ export default function StatsPage() {
         <div className="px-4">
           <div className="card">
             <p className="text-sm text-danger">{planError}</p>
-            <button onClick={() => loadPlan(true)} className="btn-secondary mt-3 w-full text-sm">
+            <button onClick={() => loadPlan(false)} className="btn-secondary mt-3 w-full text-sm">
               Try again
             </button>
           </div>
@@ -299,7 +327,8 @@ export default function StatsPage() {
           plan={plan}
           milesThisWeek={planContext?.milesThisWeek ?? 0}
           weeklyMileage={planContext?.marathon?.weeklyMileage ?? null}
-          onRegenerate={() => loadPlan(true)}
+          onRegenerate={(week) => loadPlan(true, false, week)}
+          planningWeek={planningWeek}
           regenerating={regenerating}
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}

@@ -42,7 +42,7 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 ## Tabs & Features
 
 ### Today (home tab — this is the default landing tab)
-- **Week plan** (Sunday–Saturday): a day strip showing each day's state (done / off-script / missed / today / upcoming) and a card for the selected day — session title, why it's there, target muscle regions, and exercises with loads anchored to recent top sets. Movements with no history get a one-line form cue and a "new" tag.
+- **Week plan**: an 11-day strip with today in the middle (5 back, 5 ahead), scrolling sideways and labelled by training week, showing each day's state (done / off-script / missed / today / upcoming) and a card for the selected day. Training weeks stay Sunday–Saturday; the strip stitches together the two or three weeks it touches, and next week is planned as soon as it enters the strip — session title, why it's there, target muscle regions, and exercises with loads anchored to recent top sets. Movements with no history get a one-line form cue and a "new" tag.
 - Every day gets something; when a gym session isn't right the suggestion is active recovery (walk, mobility, accessory work) or an explicit rest day.
 - "Log this" opens the Log tab prefilled with the session; "Replan week" forces regeneration.
 - **Body Map**: front/back figure, 17 muscle regions, filled by a rolling 7-day window (toggleable to all-time). Gym load fills green, run load teal — running credits quads/hamstrings/glutes/calves, otherwise a marathoner's legs read as neglected. Tap a region for last-trained and set counts.
