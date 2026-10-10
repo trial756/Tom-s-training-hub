@@ -126,6 +126,11 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
       const seen = new Set<string>();
       return (list ?? []).filter((s) => !seen.has(s.id) && !!seen.add(s.id));
     };
+    // A stored week holding only code-made sessions (catch-up runs, filler)
+    // never got a real plan — a truncated AI response once saved exactly that.
+    // Treat it as unplanned so it regenerates.
+    const isPlanned = (row: StoredWeek | undefined) =>
+      !!row?.sessions?.some((s) => !s.id.startsWith("add-") && !s.id.startsWith("fallback-"));
     const storedByWeek = new Map(
       ((storedRes.data ?? []) as StoredWeek[]).map((row) => [row.week_start, { ...row, sessions: uniqueSessions(row.sessions) }])
     );
@@ -211,7 +216,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
     // ── Current week: stored, or generated once, then placed ────────────
     const context = contextFor(weekStart);
     let current = storedByWeek.get(weekStart);
-    if (!current || regenerateWeek === weekStart) current = await generate(weekStart, context);
+    if (!current || !isPlanned(current) || regenerateWeek === weekStart) current = await generate(weekStart, context);
 
     const scheduled = scheduleWeek({
       sessions: [...(current.sessions ?? [])],
@@ -259,6 +264,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
       }
 
       let stored = storedByWeek.get(week);
+      if (week > weekStart && !isPlanned(stored)) stored = undefined;
 
       if (week < weekStart) {
         // The past is read-only: show what was planned and what got logged.

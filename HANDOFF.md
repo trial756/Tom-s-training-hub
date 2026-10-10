@@ -54,6 +54,13 @@ tracker, and the timezone fix.
   `?week=…&ensure=1`, so no request waits on two AI calls. Its context
   (`weekOf`) carries the current week's remaining sessions as
   `plannedBeforeWeek`, so it doesn't repeat Thursday's legs on Sunday.
+- **AI calls check `stop_reason`.** Week 19 was generated with
+  `max_tokens: 2000`, got cut off, and saved only its headline — the
+  reconciler then filled the empty week with easy runs and no gym. Now
+  `max_tokens` is 16000, a `max_tokens` stop throws instead of saving,
+  a plan with no sessions is rejected, a lift-less plan for an athlete who
+  lifts gets one retry, and a stored week holding only `add-`/`fallback-`
+  sessions is treated as unplanned and regenerates.
 - **Mileage reconciler reuses `add-<date>` sessions.** It used to push a
   duplicate on every reload once the scheduler moved the first; week 18 had
   five copies. Duplicates are also dropped on read.
