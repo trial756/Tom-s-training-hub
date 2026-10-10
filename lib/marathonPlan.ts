@@ -170,11 +170,12 @@ export function phaseSummaries(weeks: PlanWeek[]): PlanPhaseSummary[] {
   });
 }
 
-export function currentWeek(weeks: PlanWeek[]): PlanWeek | null {
+/** The plan week containing `dateKey` (YYYY-MM-DD), defaulting to today. */
+export function currentWeek(weeks: PlanWeek[], dateKey?: string): PlanWeek | null {
   // Athlete's timezone, not the machine's — on a UTC server this otherwise
   // advances the plan week at 7pm Central on a Saturday.
-  const today = localDateKey(new Date());
-  return weeks.find((w) => today >= w.startDate && today <= w.endDate) ?? null;
+  const day = dateKey ?? localDateKey(new Date());
+  return weeks.find((w) => day >= w.startDate && day <= w.endDate) ?? null;
 }
 
 // A short, contextual coaching tip for a given week, keyword-matched off its

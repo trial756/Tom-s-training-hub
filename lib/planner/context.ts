@@ -33,10 +33,20 @@ export function buildPlannerContext(opts: {
   runs: PlannerRunRow[];
   exerciseMuscles: { key: string; primary_muscles?: unknown; secondary_muscles?: unknown }[];
   today?: Date;
+  /**
+   * Any day in the week being planned, when that isn't the current week —
+   * the strip plans the next week ahead of time. Staleness and anchors stay
+   * measured from `today`; mileage, marathon position and days remaining
+   * follow the planned week.
+   */
+  weekOf?: Date;
+  /** Sessions still scheduled before the planned week starts. */
+  plannedBeforeWeek?: NonNullable<PlannerContext["plannedBeforeWeek"]>["sessions"];
 }): PlannerContext {
   const today = startOfLocalDay(opts.today ?? new Date());
   const todayKey = localDateKey(today);
-  const weekStartDate = startOfWeekSunday(today);
+  const currentWeekStartKey = localDateKey(startOfWeekSunday(today));
+  const weekStartDate = startOfWeekSunday(opts.weekOf ?? today);
   const weekEndDate = shiftDays(weekStartDate, 6);
   const weekStart = localDateKey(weekStartDate);
   const weekEnd = localDateKey(weekEndDate);
@@ -93,7 +103,7 @@ export function buildPlannerContext(opts: {
 
   // ── Marathon plan position ────────────────────────────────────────────
   const weeks = buildMarathonPlan();
-  const active = currentWeek(weeks);
+  const active = currentWeek(weeks, weekStart);
   const marathon = active
     ? {
         planWeek: active.weekNumber,
@@ -108,10 +118,13 @@ export function buildPlannerContext(opts: {
     : null;
 
   // ── Cadence, inferred rather than assumed ─────────────────────────────
-  const cadenceStart = shiftDays(weekStartDate, -CADENCE_WEEKS * 7);
+  // Complete weeks only: planning next week early mustn't count the current,
+  // half-finished week as a full one and drag the average down.
+  const cadenceEndKey = weekStart < currentWeekStartKey ? weekStart : currentWeekStartKey;
+  const cadenceStart = shiftDays(startOfWeekSunday(new Date(`${cadenceEndKey}T12:00:00Z`)), -CADENCE_WEEKS * 7);
   const cadenceKey = localDateKey(cadenceStart);
   const distinctDays = (rows: { logged_at: string }[]) =>
-    new Set(rows.map((r) => localDateKey(new Date(r.logged_at))).filter((d) => d >= cadenceKey && d < weekStart)).size;
+    new Set(rows.map((r) => localDateKey(new Date(r.logged_at))).filter((d) => d >= cadenceKey && d < cadenceEndKey)).size;
 
   const liftDaysPerWeek = Math.max(1, Math.round(distinctDays(opts.workouts) / CADENCE_WEEKS));
   const runDaysPerWeek = Math.max(1, Math.round(distinctDays(opts.runs) / CADENCE_WEEKS));
@@ -121,7 +134,7 @@ export function buildPlannerContext(opts: {
   // is what stops the planner prescribing an unsafe jump.
   const cadenceRuns = opts.runs.filter((r) => {
     const d = localDateKey(new Date(r.logged_at));
-    return d >= cadenceKey && d < weekStart;
+    return d >= cadenceKey && d < cadenceEndKey;
   });
   const cadenceMiles = cadenceRuns.reduce((sum, r) => sum + (Number(r.distance_miles) || 0), 0);
   const avgWeeklyMiles = Math.round((cadenceMiles / CADENCE_WEEKS) * 10) / 10;
@@ -163,7 +176,8 @@ export function buildPlannerContext(opts: {
     .sort((a, b) => b.sessions - a.sessions || (b.lastDate ?? "").localeCompare(a.lastDate ?? ""))
     .slice(0, 20);
 
-  const daysRemaining = Math.max(0, daysBetweenKeys(todayKey, weekEnd) + 1);
+  const fromKey = todayKey > weekStart ? todayKey : weekStart;
+  const daysRemaining = Math.max(0, daysBetweenKeys(fromKey, weekEnd) + 1);
 
   return {
     today: todayKey,
@@ -181,5 +195,15 @@ export function buildPlannerContext(opts: {
     avgWeeklyMiles,
     typicalRunMiles,
     anchors,
+    ...(opts.plannedBeforeWeek?.length
+      ? {
+          plannedBeforeWeek: {
+            note:
+              "Already scheduled for the days just before this week starts. Count these as done when judging what is " +
+              "neglected, and don't open the week by repeating the same regions.",
+            sessions: opts.plannedBeforeWeek,
+          },
+        }
+      : {}),
   };
 }
