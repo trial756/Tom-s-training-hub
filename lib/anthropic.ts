@@ -32,7 +32,9 @@ async function parseWithTool<T>(opts: {
 }): Promise<T> {
   const response = await client().messages.create({
     model: MODEL,
-    max_tokens: 2000,
+    // Generous on purpose: a week plan with exercises, loads and rationale
+    // outgrew the old 2000 and came back cut off. Only tokens produced are billed.
+    max_tokens: 16000,
     system: opts.system,
     tools: [
       {
@@ -48,6 +50,13 @@ async function parseWithTool<T>(opts: {
   const toolUse = response.content.find(
     (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
   );
+
+  // A response cut off at the token limit can still carry a tool call whose
+  // input is only partly there — week 19 saved its headline and lost every
+  // session that way. Never treat a truncated call as an answer.
+  if (response.stop_reason === "max_tokens") {
+    throw new Error("Claude's response was cut off before it finished. Try again.");
+  }
 
   if (!toolUse) {
     throw new Error("Claude did not return a structured tool call.");
@@ -657,6 +666,25 @@ const weekPlanSchema = {
 };
 
 export async function generateWeekPlan(contextJson: string): Promise<GeneratedWeekPlan> {
+  const liftDays = Number((JSON.parse(contextJson) as { liftDaysPerWeek?: number }).liftDaysPerWeek) || 0;
+  const liftCount = (p: GeneratedWeekPlan) =>
+    (p.sessions ?? []).filter((s) => s.kind === "lift" || s.kind === "lift_and_run").length;
+
+  let plan = await requestWeekPlan(contextJson, "");
+  // An athlete who lifts gets lift sessions — running owning the legs means
+  // upper body and core, not no gym at all. One retry with that spelled out.
+  if (liftDays > 0 && liftCount(plan) === 0) {
+    plan = await requestWeekPlan(
+      contextJson,
+      `\n\nThe athlete lifts about ${liftDays} time(s) a week. Include ${liftDays} lift session(s) — upper body and ` +
+        "core on days away from the key runs — alongside the runs."
+    );
+  }
+  if (!plan.sessions?.length) throw new Error("The planner returned no sessions for this week. Try again.");
+  return plan;
+}
+
+async function requestWeekPlan(contextJson: string, extra: string): Promise<GeneratedWeekPlan> {
   return parseWithTool<GeneratedWeekPlan>({
     system:
       "You are a strength and marathon coach planning one training week (Sunday–Saturday) for an athlete training " +
@@ -683,7 +711,8 @@ export async function generateWeekPlan(contextJson: string): Promise<GeneratedWe
     userText:
       "Plan this athlete's week from the following data. Everything here is computed from their logs — treat it " +
       "as fact and do not restate it back.\n\n" +
-      contextJson,
+      contextJson +
+      extra,
     toolName: "record_week_plan",
     toolDescription: "Records the sessions that make up one training week.",
     inputSchema: weekPlanSchema,
