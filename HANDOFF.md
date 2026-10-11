@@ -3,7 +3,7 @@
 Running state for picking this up in a fresh session. Read `CLAUDE.md` first
 (the project spec); this covers what's true *now* and what isn't finished.
 
-**Last updated:** 2026-10-07 · branches `claude/toms-training-hub-app-oki1z4`
+**Last updated:** 2026-10-11 · branches `claude/toms-training-hub-app-oki1z4`
 and `claude/timezone-workout-volume-6nbn8o` · everything pushed.
 
 ---
@@ -18,10 +18,27 @@ goal-pace effort 3.13mi, two blank weeks in August. Riegel equivalents from
 his best efforts cluster at 3:57–4:14, and those flatter the marathon for a
 low-volume runner.
 
-**He considered it and chose to keep both the race and the goal.** That is a
-settled decision — do not re-litigate it. The job now is to give the attempt
-its best shot and tell him the truth as evidence arrives. He is not fragile
-about honest numbers; he asked for them directly.
+**He considered it and chose to keep both the race and the goal — and on
+Oct 11 restated it: "3:30 will stay the goal. We will make that goal."** That
+is settled; do not re-litigate it. The app's job is to get him there: plan
+every week toward 3:30 and track progress against it. Keep reporting the
+numbers straight (readiness markers, the Nov 14 decision point) — he asked
+for honest numbers and isn't fragile about them — but frame them as what to
+fix next, not as reasons to lower the goal.
+
+**His goals, in order (confirmed Oct 11):**
+1. **Dec 13 marathon, 3:30.** Everything in the build serves this.
+2. **Feb 28 half marathon — for fun, no training for it.** Don't build a
+   half-marathon block; it rides on whatever fitness the post-race training
+   leaves.
+3. **After Dec 13: muscle and athleticism.** Hypertrophy plus power, speed,
+   agility and conditioning — not bodybuilding alone. See open item 3.
+
+**Scheduling rule (Oct 11): no off days, stack the light work.** Every day is
+a training day. Easy runs never stand alone — they carry a mobility / yoga /
+stretch / core block in the same session, so the day that frees goes to a
+lift or quality work. He wants to optimise limited time. Recovery comes from
+easy days staying easy, not from rest days.
 
 ---
 
@@ -61,6 +78,12 @@ tracker, and the timezone fix.
   a plan with no sessions is rejected, a lift-less plan for an athlete who
   lifts gets one retry, and a stored week holding only `add-`/`fallback-`
   sessions is treated as unplanned and regenerates.
+- **No rest days (Oct 11).** The week-plan prompt asks for one session per
+  remaining day; easy runs carry a mobility/core block (`kind: "run"` with
+  exercises); "rest" is no longer in the schema enum (the type keeps it for
+  old stored weeks). An empty day falls back to a real mobility + core block,
+  and when the reconciler adds a catch-up run onto an `active_recovery` day it
+  merges them ("Easy 4mi + Mobility + core") instead of displacing the block.
 - **Mileage reconciler reuses `add-<date>` sessions.** It used to push a
   duplicate on every reload once the scheduler moved the first; week 18 had
   five copies. Duplicates are also dropped on read.
@@ -116,9 +139,13 @@ Press), but nobody has watched a cold `/api/plan` generation.
      5, shoulder press 3, cable lateral 3, shrug 3, Pallof 3) was correct.
      If he wants more, he adds sets to movements already in the session, not
      new movements, and only upper body. Legs belong to the running.
-   - **After Dec 13 (build):** 2–3 movements per muscle and 10–20 sets per
-     muscle per week. Lifting stops yielding to running, mileage drops, and the
-     runner-friendly leg restriction comes off. Gate it on the race date
+   - **After Dec 13 (muscle + athleticism):** 2–3 movements per muscle and
+     10–20 sets per muscle per week, plus athletic work — power (jumps,
+     throws, Olympic-lift variants), speed, agility and conditioning. Lifting
+     stops yielding to running, mileage drops to maintenance, and the
+     runner-friendly leg restriction comes off. The Feb 28 half is for fun
+     and gets no dedicated block. The no-rest-days / stacking rule carries
+     over. Gate it on the race date
      rather than hand-editing it on the day: the context packet already carries
      the phase, so add a post-race phase and branch the prompt on it.
    - Tom raised this himself (he asked whether one exercise per muscle is

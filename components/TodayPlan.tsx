@@ -176,7 +176,11 @@ export default function TodayPlan({
               <span className="text-[11px] font-medium text-run">added to close the week&apos;s mileage</span>
             )}
           </div>
-          {session && <span className="pill shrink-0 bg-base-800 text-muted">{KIND_LABEL[session.kind]}</span>}
+          {session && (
+            <span className="pill shrink-0 bg-base-800 text-muted">
+              {session.kind === "run" && session.exercises.length > 0 ? "Run + mobility" : KIND_LABEL[session.kind]}
+            </span>
+          )}
         </div>
 
         {selected?.status === "off_script" && (

@@ -588,12 +588,14 @@ const weekPlanSchema = {
     sessions: {
       type: "array",
       description:
-        "Every session the week should contain, including runs. One per training slot — do not emit more lift " +
-        "sessions than the athlete's cadence supports.",
+        "One session for every remaining day of the week (daysRemaining in the data — seven for a full week), " +
+        "runs included. Don't emit more lift sessions than the athlete's cadence supports; the other days stack " +
+        "light work with runs instead.",
       items: {
         type: "object",
         properties: {
-          kind: { type: "string", enum: ["lift", "run", "lift_and_run", "active_recovery", "rest"] },
+          // No "rest": every day is a training day.
+          kind: { type: "string", enum: ["lift", "run", "lift_and_run", "active_recovery"] },
           title: { type: "string", description: "Short session name, e.g. 'Pull + rear delts' or 'Long run'." },
           rationale: {
             type: "string",
@@ -604,7 +606,7 @@ const weekPlanSchema = {
           regions: {
             type: "array",
             items: { type: "string", enum: [...MUSCLE_REGIONS] },
-            description: "Muscle regions this session targets. Empty for pure run or rest days.",
+            description: "Muscle regions this session targets, including any mobility or core block. Empty only for a run with no block.",
           },
           preferred_dow: {
             type: ["integer", "null"],
@@ -630,7 +632,10 @@ const weekPlanSchema = {
           },
           exercises: {
             type: "array",
-            description: "Empty for rest days. 3-6 movements for a lift session, 1-3 for active recovery.",
+            description:
+              "3-6 movements for a lift session. For an easy run or an active-recovery day, the 2-4 movement " +
+              "mobility / yoga / stretch / core / accessory block that goes with it. Empty only for a key run " +
+              "(long run, goal pace, intervals).",
             items: {
               type: "object",
               properties: {
@@ -697,10 +702,17 @@ async function requestWeekPlan(contextJson: string, extra: string): Promise<Gene
       "yields when the week is tight.\n\n" +
       "Running volume is climbing deliberately, so plan the week's runs to reach the mileage target rather than " +
       "repeating last week's distances.\n\n" +
-      "Every day gets something — there are no blank days. When the right answer is not a gym session, suggest " +
-      "active recovery: a walk, mobility or yoga, or light accessory work for the small muscles that normal " +
-      "pressing and pulling sessions miss. A genuine rest day is a valid session; say plainly that resting is " +
-      "the work.\n\n" +
+      "Every day is a training day: no rest days and no blank days. Plan one session for each remaining day, " +
+      "and get the most out of each one — the athlete wants to optimise limited time, not spread it thin.\n\n" +
+      "Stack the light work. An easy run never stands alone: give it a mobility, yoga, stretching, core or " +
+      "small-muscle accessory block in the same session (kind 'run', with the block as its exercises). Never " +
+      "give mobility or yoga a day of its own when an easy run could carry it — the day that frees goes to a " +
+      "lift or quality work. A run and an upper-body or core lift on the same day is one 'lift_and_run' " +
+      "session. Use 'active_recovery' only when a day has no run, and even then make it real work (a walk plus " +
+      "accessory, core and mobility).\n\n" +
+      "Recovery comes from easy days being genuinely easy, not from days off: keep the long run and goal-pace " +
+      "or interval sessions focused (a short mobility block at most), keep heavy legs off the days around them, " +
+      "and keep the add-ons on easy days light.\n\n" +
       "Bias the plan toward what the data says is neglected. Prefer movements from the athlete's anchor list and " +
       "progress them from their last top set. Only introduce a new movement when nothing in the list covers a " +
       "neglected region, and when you do, give one short form cue. Leg and core work for a marathoner in a build " +

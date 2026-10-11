@@ -43,14 +43,26 @@ function satisfiedBy(session: PlanSession, log: DayLog): boolean {
   }
 }
 
+/**
+ * What an otherwise empty day gets. Never a day off — a short mobility and
+ * core block, which the mileage reconciler can fold an easy run into.
+ */
 export function fallbackSession(id: string): PlanSession {
+  const move = (name: string, sets: number, reps: string, regions: PlanSession["regions"]) => ({
+    name, sets, reps, target: null, cue: null, isNew: false, regions,
+  });
   return {
     id,
     kind: "active_recovery",
-    title: "Easy movement",
-    rationale: "Nothing scheduled — keep it light with a walk or some mobility work.",
-    regions: [],
-    exercises: [],
+    title: "Mobility + core",
+    rationale: "Nothing else landed here, so the day goes to mobility and core rather than sitting empty.",
+    regions: ["abs", "obliques", "glutes"],
+    exercises: [
+      move("Brisk walk", 1, "20-30 min", ["calves", "glutes"]),
+      move("World's Greatest Stretch", 2, "5 per side", ["glutes", "hamstrings"]),
+      move("Dead Bug", 3, "8 per side", ["abs", "obliques"]),
+      move("Side Plank", 3, "30s per side", ["obliques"]),
+    ],
     priority: 99,
     preferredDow: null,
     taxesLegs: false,
