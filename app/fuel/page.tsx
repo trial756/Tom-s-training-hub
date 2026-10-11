@@ -6,7 +6,7 @@ import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
 import UndoToast from "@/components/UndoToast";
 import type { Favorite, Meal } from "@/lib/types";
-import { formatDateTime, localDateKey } from "@/lib/format";
+import { formatLoggedAt, localDateKey, loggedAtFor } from "@/lib/format";
 import { notifyDataChanged } from "@/lib/refresh";
 import { AUTO_FAVORITE_THRESHOLD, normalizeMealKey } from "@/lib/mealFavorites";
 
@@ -114,7 +114,7 @@ export default function FuelPage() {
       const res = await fetch("/api/meals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, logged_at: new Date(`${date}T12:00:00`).toISOString() }),
+        body: JSON.stringify({ text, logged_at: loggedAtFor(date) }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to log meal.");
@@ -361,7 +361,7 @@ function MealCard({
           <span className={`pill ${MEAL_TYPE_COLORS[meal.meal_type ?? ""] ?? "bg-gray-500/20 text-gray-300"}`}>
             {meal.meal_type ?? "meal"}
           </span>
-          <span className="text-xs text-gray-500">{formatDateTime(meal.logged_at)}</span>
+          <span className="text-xs text-gray-500">{formatLoggedAt(meal.logged_at, meal.created_at)}</span>
         </div>
         <span className="text-xs text-gray-500">{meal.calories ?? "—"} cal</span>
       </button>

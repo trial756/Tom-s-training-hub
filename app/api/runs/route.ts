@@ -21,9 +21,16 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ runs: data });
 }
 
+/**
+ * Lenient on purpose: "4 mi", "4mi" and "4,0" from a phone keyboard all mean
+ * 4. A strict Number() turned those into null and the value vanished silently.
+ */
 function toNullableNumber(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
-  const n = Number(v);
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const match = String(v).replace(",", ".").match(/-?\d+(\.\d+)?/);
+  if (!match) return null;
+  const n = Number(match[0]);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -69,11 +76,20 @@ export async function POST(req: NextRequest) {
     const submittedType = typeof body.run_type === "string" ? body.run_type.trim() : "";
     const run_type = RUN_TYPES.includes(submittedType as (typeof RUN_TYPES)[number]) ? submittedType : "Other";
 
-    const distance_miles = toNullableNumber(body.distance_miles);
-    const duration_seconds = toNullableNumber(body.duration_seconds);
+    // Any two of distance, duration and pace give the third. Copying time and
+    // pace off a watch without the distance used to save no mileage at all —
+    // the week's miles read 0 though the AI summary said "Easy 4mi".
+    let distance_miles = toNullableNumber(body.distance_miles);
+    let duration_seconds = toNullableNumber(body.duration_seconds);
     let pace_seconds_per_mile = toNullableNumber(body.pace_seconds_per_mile);
     if (pace_seconds_per_mile == null && distance_miles && duration_seconds) {
       pace_seconds_per_mile = Math.round(duration_seconds / distance_miles);
+    }
+    if (distance_miles == null && duration_seconds && pace_seconds_per_mile) {
+      distance_miles = Math.round((duration_seconds / pace_seconds_per_mile) * 100) / 100;
+    }
+    if (duration_seconds == null && distance_miles && pace_seconds_per_mile) {
+      duration_seconds = Math.round(distance_miles * pace_seconds_per_mile);
     }
 
     const structured: StructuredRunInput = {

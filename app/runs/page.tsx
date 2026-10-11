@@ -6,7 +6,7 @@ import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
 import type { IntervalSet, Run, RunIntervals } from "@/lib/types";
 import { RUN_TYPES } from "@/lib/types";
-import { formatDateTime, formatDuration, formatPace, localDateKey } from "@/lib/format";
+import { formatDuration, formatLoggedAt, formatPace, localDateKey, loggedAtFor } from "@/lib/format";
 import { notifyDataChanged } from "@/lib/refresh";
 import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
 import {
@@ -158,18 +158,18 @@ export default function RunsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           run_type: runType || null,
-          logged_at: new Date(`${date}T12:00:00`).toISOString(),
-          distance_miles: form.distance ? Number(form.distance) : null,
+          logged_at: loggedAtFor(date),
+          distance_miles: form.distance || null,
           duration_seconds: parseClock(digitsToClock(form.duration)),
           pace_seconds_per_mile: parseClock(digitsToClock(form.pace)),
-          avg_hr: form.avgHr ? Number(form.avgHr) : null,
-          max_hr: form.maxHr ? Number(form.maxHr) : null,
-          cadence_spm: form.cadence ? Number(form.cadence) : null,
-          elev_gain_ft: form.elevGain ? Number(form.elevGain) : null,
-          elev_loss_ft: form.elevLoss ? Number(form.elevLoss) : null,
-          calories: form.calories ? Number(form.calories) : null,
-          temp_f: form.temp ? Number(form.temp) : null,
-          humidity_pct: form.humidity ? Number(form.humidity) : null,
+          avg_hr: form.avgHr || null,
+          max_hr: form.maxHr || null,
+          cadence_spm: form.cadence || null,
+          elev_gain_ft: form.elevGain || null,
+          elev_loss_ft: form.elevLoss || null,
+          calories: form.calories || null,
+          temp_f: form.temp || null,
+          humidity_pct: form.humidity || null,
           surface: form.surface || null,
           shoes: form.shoes || null,
           notes: form.notes || null,
@@ -502,7 +502,7 @@ export default function RunsPage() {
                     <span className={`pill ${RUN_TYPE_COLORS[r.run_type ?? "Other"] ?? RUN_TYPE_COLORS.Other}`}>
                       {r.run_type ?? "run"}
                     </span>
-                    <span className="text-xs text-gray-500">{formatDateTime(r.logged_at)}</span>
+                    <span className="text-xs text-gray-500">{formatLoggedAt(r.logged_at, r.created_at)}</span>
                   </div>
                   <p className="mt-1 text-sm text-gray-300">
                     {r.distance_miles ?? "?"} mi ·{" "}
