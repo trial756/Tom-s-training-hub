@@ -8,6 +8,8 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 
 ## Runner Profile (hardcoded constants)
 - Race: **December 13, 2026**
+- Also entered: **half marathon, February 28, 2027** — for fun, no dedicated training block
+- After Dec 13 the focus becomes **muscle and athleticism** (hypertrophy plus power, speed, agility, conditioning)
 - Goal time: **3:30:00** · Goal pace: **8:01/mi**
 - Bodyweight: **160 lbs**
 - Training block: 27 weeks, Sunday–Saturday training weeks
@@ -43,7 +45,7 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 
 ### Today (home tab — this is the default landing tab)
 - **Week plan**: an 11-day strip with today in the middle (5 back, 5 ahead), scrolling sideways and labelled by training week, showing each day's state (done / off-script / missed / today / upcoming) and a card for the selected day. Training weeks stay Sunday–Saturday; the strip stitches together the two or three weeks it touches, and next week is planned as soon as it enters the strip — session title, why it's there, target muscle regions, and exercises with loads anchored to recent top sets. Movements with no history get a one-line form cue and a "new" tag.
-- Every day gets something; when a gym session isn't right the suggestion is active recovery (walk, mobility, accessory work) or an explicit rest day.
+- **No off days.** Every day is a training day, and light work is stacked to save time: an easy run carries a mobility / yoga / stretch / core block in the same session, so mobility never takes a day of its own and the freed day goes to a lift or quality work. Recovery comes from easy days staying easy.
 - "Log this" opens the Log tab prefilled with the session; "Replan week" forces regeneration.
 - **Body Map**: front/back figure, 17 muscle regions, filled by a rolling 7-day window (toggleable to all-time). Gym load fills green, run load teal — running credits quads/hamstrings/glutes/calves, otherwise a marathoner's legs read as neglected. Tap a region for last-trained and set counts.
 - Stats (below the plan) — everything in the section that follows, with the trend charts in a snap-scrolling carousel.
@@ -147,7 +149,7 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 
 ---
 
-**generateWeekPlan**: produces one training week's sessions from a context packet that is computed in code (marathon phase and target, miles so far, per-region staleness, inferred lift/run cadence, per-lift top-set anchors) — the model plans, it never infers history. Prompt enforces: running already owns the legs, lifting backs off in Peak weeks, no day is ever blank, and session count matches real cadence rather than an invented five-day split.
+**generateWeekPlan**: produces one training week's sessions from a context packet that is computed in code (marathon phase and target, miles so far, per-region staleness, inferred lift/run cadence, per-lift top-set anchors) — the model plans, it never infers history. Prompt enforces: running already owns the legs, lifting backs off in Peak weeks, no rest days and no blank days, easy runs stacked with mobility/core work, and lift-session count matches real cadence rather than an invented five-day split.
 
 Placing sessions onto days — and re-placing them when a day goes off plan — is deterministic (`lib/planner/schedule.ts`), so a reshuffle is instant and costs no AI call. Past days freeze. A lift session only counts as done when the regions actually trained overlap what it targeted, so training chest on the planned legs day marks the day off-script and returns legs to the pool. Leg-taxing sessions are kept off the days either side of a key run.
 

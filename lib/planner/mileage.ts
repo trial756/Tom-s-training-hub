@@ -111,6 +111,15 @@ export function reconcileMileage(opts: {
     if (session && session.kind !== "rest" && session.kind !== "active_recovery") continue;
     const miles = Math.min(remaining, runSize);
     const id = `add-${day.date}`;
+    // The run joins whatever light work the day already had ("Easy 4mi +
+    // Mobility + core") instead of pushing it to a day of its own — easy runs
+    // and mobility share a day so the other days stay free.
+    const carried = session && session.kind === "active_recovery" && session.id !== id ? session : undefined;
+    if (carried) {
+      const at = sessions.findIndex((s) => s.id === carried.id);
+      if (at >= 0) sessions.splice(at, 1);
+      byId.delete(carried.id);
+    }
     // A run added for this date on an earlier load may have been moved
     // elsewhere by the scheduler. Reuse it: pushing a second session with the
     // same id is how a week grew five copies of one catch-up run.
@@ -119,10 +128,10 @@ export function reconcileMileage(opts: {
     const addition: PlanSession = {
       id,
       kind: "run",
-      title: `Easy ${Math.round(miles * 10) / 10}mi`,
+      title: `Easy ${Math.round(miles * 10) / 10}mi${carried ? ` + ${carried.title}` : ""}`,
       rationale: `Added to close this week's mileage — ${Math.round((weekTarget - milesThisWeek) * 10) / 10}mi still to run.`,
-      regions: [],
-      exercises: [],
+      regions: carried?.regions ?? [],
+      exercises: carried?.exercises ?? [],
       priority: 4,
       preferredDow: null,
       taxesLegs: false,
