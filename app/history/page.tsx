@@ -6,7 +6,7 @@ import Spinner from "@/components/Spinner";
 import CoachingNote from "@/components/CoachingNote";
 import UndoToast from "@/components/UndoToast";
 import type { Favorite, Meal, Run, Workout } from "@/lib/types";
-import { formatDateTime, formatDuration, formatPace, summarizeExerciseNames } from "@/lib/format";
+import { formatDuration, formatLoggedAt, formatPace, summarizeExerciseNames } from "@/lib/format";
 import { notifyDataChanged } from "@/lib/refresh";
 import { describeIntervals } from "@/lib/intervals";
 
@@ -294,7 +294,7 @@ function HistoryCard({
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`pill ${kindColor} capitalize`}>{kind === "workout" ? item.type || kind : kind}</span>
-            <span className="text-xs text-gray-500">{formatDateTime(item.logged_at)}</span>
+            <span className="text-xs text-gray-500">{formatLoggedAt(item.logged_at, item.created_at)}</span>
           </div>
 
           {kind === "workout" && (

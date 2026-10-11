@@ -32,6 +32,32 @@ export function formatDateTime(iso: string | null | undefined): string {
   });
 }
 
+/**
+ * When an entry happened, for list rows. The log forms only know a date, so
+ * a backdated entry has no real time — it's stored at noon purely to keep
+ * the day stable — and shows the date alone. An entry logged on the day it
+ * happened shows the real time, taken from when the row was created (older
+ * rows were stamped at noon too, so logged_at can't be trusted for the time).
+ */
+export function formatLoggedAt(loggedAt: string | null | undefined, createdAt?: string | null): string {
+  if (!loggedAt) return "";
+  const day = new Date(loggedAt);
+  const dateLabel = day.toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, weekday: "short", month: "short", day: "numeric" });
+  if (!createdAt || localDateKey(new Date(createdAt)) !== localDateKey(day)) return dateLabel;
+  const time = new Date(createdAt).toLocaleTimeString("en-US", { timeZone: APP_TIMEZONE, hour: "numeric", minute: "2-digit" });
+  return `${dateLabel}, ${time}`;
+}
+
+/**
+ * The logged_at to send for a date picked on a log form: the real moment when
+ * it's today, noon when backdated (the time is unknown; noon keeps the date
+ * from shifting across timezones).
+ */
+export function loggedAtFor(dateKey: string): string {
+  if (dateKey === localDateKey(new Date())) return new Date().toISOString();
+  return new Date(`${dateKey}T12:00:00`).toISOString();
+}
+
 // Short label for a workout's exercise list when no AI summary is
 // available (e.g. entries logged before the summary field existed) — caps
 // at `max` names so a long session doesn't turn into an unreadable wall of

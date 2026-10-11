@@ -5,7 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
 import type { Run, Workout } from "@/lib/types";
-import { formatDateTime, formatDuration, formatPace, localDateKey, summarizeExerciseNames } from "@/lib/format";
+import { formatDuration, formatLoggedAt, formatPace, localDateKey, loggedAtFor, summarizeExerciseNames } from "@/lib/format";
 import { notifyDataChanged } from "@/lib/refresh";
 
 const QUICK_LOG_CHIPS: { label: string; prefill: string }[] = [
@@ -89,7 +89,7 @@ export default function LogPage() {
       const res = await fetch("/api/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, logged_at: new Date(`${date}T12:00:00`).toISOString() }),
+        body: JSON.stringify({ text, logged_at: loggedAtFor(date) }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to log workout.");
@@ -227,7 +227,7 @@ export default function LogPage() {
                   <span className={`pill capitalize ${entry.kind === "run" ? "bg-run/20 text-run" : "bg-accent/20 text-accent"}`}>
                     {entry.kind}
                   </span>
-                  <span className="text-xs text-gray-500">{formatDateTime(entry.item.logged_at)}</span>
+                  <span className="text-xs text-gray-500">{formatLoggedAt(entry.item.logged_at, entry.item.created_at)}</span>
                 </div>
                 {entry.kind === "workout" ? (
                   <p className="mt-1 text-sm text-gray-300">
