@@ -3,7 +3,7 @@
 Running state for picking this up in a fresh session. Read `CLAUDE.md` first
 (the project spec); this covers what's true *now* and what isn't finished.
 
-**Last updated:** 2026-10-11 · branches `claude/toms-training-hub-app-oki1z4`
+**Last updated:** 2026-10-12 · branches `claude/toms-training-hub-app-oki1z4`
 and `claude/timezone-workout-volume-6nbn8o` · everything pushed.
 
 ---
@@ -54,6 +54,18 @@ easy days staying easy, not from rest days.
 Plus, after those: mileage reconciler, the 3:30 rescale and readiness
 tracker, and the timezone fix.
 
+**Shipped Oct 7–11 (PRs #1–#8, all merged to the deploy branch):**
+
+| PR | What |
+|---|---|
+| #1 | Timezone: AI-prompt dates, calendar-day counting, DST-safe scheduling |
+| #2 | Homepage sections reload on signals (`lib/refresh.ts`): data written, midnight Central, foreground |
+| #3, #5 | Body map redrawn as an écorché figure modelled on Tom's reference image (fibres, packed muscle heads, slate sculpture, load colour ramp + haze) |
+| #4 | 11-day strip centred on today; next week planned ahead |
+| #6 | Planner never saves a truncated AI response; weeks keep lift sessions |
+| #7 | No rest days; easy runs stacked with a mobility/core block |
+| #8 | Runs derive the missing one of distance/duration/pace; lenient number parsing; entries show real times |
+
 ### Architecture worth knowing
 
 - **Planner split**: facts are computed in code (`lib/planner/context.ts`),
@@ -78,6 +90,14 @@ tracker, and the timezone fix.
   a plan with no sessions is rejected, a lift-less plan for an athlete who
   lifts gets one retry, and a stored week holding only `add-`/`fallback-`
   sessions is treated as unplanned and regenerates.
+- **Runs: any two of distance, duration and pace give the third**
+  (`app/api/runs/route.ts`), and number fields parse leniently ("4 mi" → 4,
+  "6,2" → 6.2). Oct 11's run saved time + pace but no distance and the week
+  read 0 mi; that row was repaired to 4.01 mi.
+- **`logged_at` is the real moment when logging for today** (`loggedAtFor`),
+  noon when backdated. Lists use `formatLoggedAt(logged_at, created_at)`:
+  real time from `created_at` for a same-day entry (so old noon-stamped rows
+  show correctly), date only for a backdated one.
 - **No rest days (Oct 11).** The week-plan prompt asks for one session per
   remaining day; easy runs carry a mobility/core block (`kind: "run"` with
   exercises); "rest" is no longer in the schema enum (the type keeps it for
@@ -112,23 +132,32 @@ weekly bucketing cross-checked in SQL, timezone fix against the exact
 mis-dated instant. Charts and the Today/body-map UI screenshot-reviewed at
 390px.
 
-**NOT verified live — the main risk:** `generateWeekPlan`. No
-`ANTHROPIC_API_KEY` has been available in any container, so the AI call has
-never run end to end here. His Oct 6 session suggests it works well in
-production (it correctly targeted side delts/traps/abs and introduced Pallof
-Press), but nobody has watched a cold `/api/plan` generation.
+**Verified live in production:** `generateWeekPlan` works end to end since
+#6 — week 19 regenerated Oct 10 23:46 with two upper-body lifts, a goal-pace
+interval day and the long run.
+
+**NOT yet verified live:** the no-rest-days prompt (#7). Week 19 predates it;
+Tom was told to tap "Replan week" once. Check the next generated week has
+seven sessions, easy runs carrying a block, and no rest day.
+
+No `ANTHROPIC_API_KEY` or Supabase env exists in these containers, so
+everything server-side was tested against stand-ins (see §6).
 
 ---
 
 ## 4. Open items
 
-1. **Watch the first `/api/plan` generation of a new week.** It's slow (one
-   AI call) and untested from cold.
-2. **Two junk rows in `runs`**: a duplicate 9/14 interval (6.02mi logged
-   twice) and an 8/2 "Easy 5mi" with a 2:36 duration / 14:15 pace — the
-   latter is the visible spike in the Pace Trend chart. He knows; deleting
-   from History works.
-3. **After Dec 13 the lifting prompt should flip.** The system prompt in
+1. **Confirm the no-rest-days rule on a real generation** (week 19 replan or
+   week 20, generated when it enters the strip on Tue Oct 13). If an easy run
+   still stands alone or a rest day appears, tighten the prompt.
+2. **Week 19's long run is titled "16 mi" but planned at 14** (target 16).
+   The model wrote inconsistent `miles`; a replan should fix it. If it
+   recurs, have the planner set the long run's miles from
+   `marathon.longRunMiles` in code.
+3. **Junk rows in `runs`** (low priority — Tom isn't concerned): a duplicate
+   9/14 interval (6.02mi twice) and an 8/2 "Easy 5mi" at 14:15/mi (the Pace
+   Trend spike). Deleting from History works.
+4. **After Dec 13 the lifting prompt should flip.** The system prompt in
    `generateWeekPlan` (`lib/anthropic.ts`) says running is the priority and
    lifting volume yields when the week is tight. That's right for the race
    build, wrong for an off-season block.
@@ -150,7 +179,7 @@ Press), but nobody has watched a cold `/api/plan` generation.
      the phase, so add a post-race phase and branch the prompt on it.
    - Tom raised this himself (he asked whether one exercise per muscle is
      optimal), so expect him to ask for it once the race is done.
-4. **`week_plans` has no UI for editing a generated session** — he can
+5. **`week_plans` has no UI for editing a generated session** — he can
    replan the whole week or log off-plan, nothing in between.
 
 ---
@@ -198,6 +227,19 @@ split.
 - **Verify logic against real data** by pulling rows via MCP into a fixture
   in the scratchpad and running pure functions with `npx tsx`. That's how
   everything here was checked.
+- **End-to-end route tests without credentials** (how #4, #6, #7, #8 were
+  verified; the scripts lived in the scratchpad and are gone — rebuild):
+  a ~60-line Node HTTP server stands in for both services. It serves
+  PostgREST-style `GET/POST/PATCH /rest/v1/<table>` (filters `eq`, `gte`,
+  `in`; return the row object when `Accept` has `vnd.pgrst.object`) seeded
+  from an MCP fixture, and `POST /v1/messages` returning a `tool_use` block.
+  Run `next dev` with `SUPABASE_URL` and `ANTHROPIC_BASE_URL` pointed at it
+  and `NO_PROXY=127.0.0.1`. Fake the server clock with a
+  `NODE_OPTIONS=--require` shim that offsets `Date` from a file: re-anchor
+  only when the file changes (time must never run backwards), cache reads
+  (Next calls `Date.now()` constantly), and copy `Date.parse` / `Date.UTC`
+  onto the subclass or Next's sandbox throws. Unknown tables must return
+  `[]`, not crash — the page loads stats too.
 - **Playwright**: installed globally, not locally. Load via
   `createRequire(process.env.GLOBAL_NM + '/')` with `GLOBAL_NM=$(npm root -g)`;
   ESM `import` and `NODE_PATH` both fail. Chromium is at
