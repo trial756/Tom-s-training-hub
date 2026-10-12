@@ -2,6 +2,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { APP_TIMEZONE, formatDuration, formatPace } from "@/lib/format";
 import { describeIntervals } from "@/lib/intervals";
 import { MUSCLE_REGIONS } from "@/lib/muscles";
+import { STRENGTH_PRINCIPLES } from "@/lib/planner/strength";
+import type { PlannerContext } from "@/lib/planner/types";
 import type { RunIntervals } from "@/lib/types";
 
 const MODEL = "claude-sonnet-4-6";
@@ -624,7 +626,8 @@ const weekPlanSchema = {
             type: "boolean",
             description:
               "True if this session leaves the legs fatigued (squats, deadlifts, lunges, hard intervals). Used to " +
-              "keep it away from key run days.",
+              "keep it off the days around the long run and spaced apart from other hard days. A quality run with heavy " +
+              "legs stacked on it (lift_and_run) is one hard day — set this true for it.",
           },
           priority: {
             type: "integer",
@@ -633,9 +636,10 @@ const weekPlanSchema = {
           exercises: {
             type: "array",
             description:
-              "3-6 movements for a lift session. For an easy run or an active-recovery day, the 2-4 movement " +
-              "mobility / yoga / stretch / core / accessory block that goes with it. Empty only for a key run " +
-              "(long run, goal pace, intervals).",
+              "3-6 movements for a lift session (for 'lift_and_run', the lift that follows the run). For an easy run " +
+              "or an active-recovery day, the 2-4 movement mobility / yoga / stretch / core / accessory block that " +
+              "goes with it. For a key run with no lift (long run, goal pace, intervals), a 2-3 movement dynamic " +
+              "warm-up, or empty.",
             items: {
               type: "object",
               properties: {
@@ -671,55 +675,70 @@ const weekPlanSchema = {
 };
 
 export async function generateWeekPlan(contextJson: string): Promise<GeneratedWeekPlan> {
-  const liftDays = Number((JSON.parse(contextJson) as { liftDaysPerWeek?: number }).liftDaysPerWeek) || 0;
+  const context = JSON.parse(contextJson) as Partial<PlannerContext>;
+  const dose = context.strengthDose;
+  const liftTarget = dose?.liftSessions ?? (Number(context.liftDaysPerWeek) || 0);
   const liftCount = (p: GeneratedWeekPlan) =>
     (p.sessions ?? []).filter((s) => s.kind === "lift" || s.kind === "lift_and_run").length;
 
-  let plan = await requestWeekPlan(contextJson, "");
-  // An athlete who lifts gets lift sessions — running owning the legs means
-  // upper body and core, not no gym at all. One retry with that spelled out.
-  if (liftDays > 0 && liftCount(plan) === 0) {
+  let plan = await requestWeekPlan(contextJson, dose?.mode === "build", "");
+  // The week always carries gym work — running owning the legs changes what
+  // the lifting is, not whether it happens. One retry with that spelled out.
+  if (liftTarget > 0 && liftCount(plan) === 0) {
     plan = await requestWeekPlan(
       contextJson,
-      `\n\nThe athlete lifts about ${liftDays} time(s) a week. Include ${liftDays} lift session(s) — upper body and ` +
-        "core on days away from the key runs — alongside the runs."
+      dose?.mode === "build",
+      `\n\nThe week needs ${liftTarget} lift session(s) per the strengthDose — ${dose?.guidance ?? "upper body and core away from the key runs"}`
     );
   }
   if (!plan.sessions?.length) throw new Error("The planner returned no sessions for this week. Try again.");
   return plan;
 }
 
-async function requestWeekPlan(contextJson: string, extra: string): Promise<GeneratedWeekPlan> {
+const MARATHON_FRAME =
+  "You are a strength and marathon coach planning one training week (Sunday–Saturday) for an athlete training " +
+  "for a 3:30:00 marathon at 8:01/mi goal pace.\n\n" +
+  "The athlete is chasing a fixed race date on an aggressive build, with weekly mileage climbing from a low " +
+  "base. Running is the priority: the long run and any goal-pace or interval work are the sessions that must " +
+  "happen, and everything else arranges itself around them. Lifting serves the running — it makes the athlete " +
+  "durable — and its volume is what yields when the week is tight. Plan the week's runs to reach the mileage " +
+  "target rather than repeating last week's distances.\n\n";
+
+const BUILD_FRAME =
+  "You are a strength and conditioning coach planning one training week (Sunday–Saturday) for an athlete who " +
+  "has finished their marathon. The focus is now muscle and athleticism: hypertrophy, power, speed, agility " +
+  "and conditioning. Lifting leads; running is conditioning and should never compromise the lifts.\n\n";
+
+async function requestWeekPlan(contextJson: string, postRace: boolean, extra: string): Promise<GeneratedWeekPlan> {
   return parseWithTool<GeneratedWeekPlan>({
     system:
-      "You are a strength and marathon coach planning one training week (Sunday–Saturday) for an athlete training " +
-      "for a 3:30:00 marathon at 8:01/mi goal pace.\n\n" +
-      "The athlete is chasing a fixed race date on an aggressive nine-week build, with weekly mileage climbing " +
-      "from a low base. Running is the priority: the long run and any goal-pace work are the two sessions that " +
-      "must happen, and everything else arranges itself around them. Heavy leg work the day before or after a " +
-      "long run or an interval session costs more than it gains, so lifting serves the running here — keep it to " +
-      "upper body and core on the days either side of a key run, and treat lifting volume as the thing that " +
-      "yields when the week is tight.\n\n" +
-      "Running volume is climbing deliberately, so plan the week's runs to reach the mileage target rather than " +
-      "repeating last week's distances.\n\n" +
+      (postRace ? BUILD_FRAME : MARATHON_FRAME) +
       "Every day is a training day: no rest days and no blank days. Plan one session for each remaining day, " +
       "and get the most out of each one — the athlete wants to optimise limited time, not spread it thin.\n\n" +
       "Stack the light work. An easy run never stands alone: give it a mobility, yoga, stretching, core or " +
       "small-muscle accessory block in the same session (kind 'run', with the block as its exercises). Never " +
       "give mobility or yoga a day of its own when an easy run could carry it — the day that frees goes to a " +
-      "lift or quality work. A run and an upper-body or core lift on the same day is one 'lift_and_run' " +
-      "session. Use 'active_recovery' only when a day has no run, and even then make it real work (a walk plus " +
-      "accessory, core and mobility).\n\n" +
-      "Recovery comes from easy days being genuinely easy, not from days off: keep the long run and goal-pace " +
-      "or interval sessions focused (a short mobility block at most), keep heavy legs off the days around them, " +
-      "and keep the add-ons on easy days light.\n\n" +
-      "Bias the plan toward what the data says is neglected. Prefer movements from the athlete's anchor list and " +
-      "progress them from their last top set. Only introduce a new movement when nothing in the list covers a " +
-      "neglected region, and when you do, give one short form cue. Leg and core work for a marathoner in a build " +
-      "block should be runner-friendly — split squats, step-ups, glute and hip stability, calf and soleus work, " +
-      "anti-rotation core — not maximal bilateral loading.\n\n" +
-      "Match the number of lift sessions to the athlete's actual cadence; do not invent a five-day split for " +
-      "someone who lifts twice a week.\n\n" + todayContext(),
+      "lift or quality work. A run and a lift on the same day is one 'lift_and_run' session. Use " +
+      "'active_recovery' only when a day has no run, and even then make it real work (a walk plus accessory, " +
+      "core and mobility).\n\n" +
+      "Strength principles — these are the coaching philosophy, not a template:\n" +
+      STRENGTH_PRINCIPLES.map((p) => `- ${p}`).join("\n") +
+      "\n\n" +
+      "The strengthDose in the data sets how many lift sessions the week carries and what they're for; it is " +
+      "computed from the block position, so follow its counts. Within that, the exercises are yours to choose, " +
+      "and they should change with the athlete rather than repeat a fixed routine:\n" +
+      "- Rotate variations week to week. recentLifts shows what was just done — if last week's heavy lower was " +
+      "split squats, this week might lead with a trap-bar deadlift or step-ups, and the calf work might switch " +
+      "between straight-leg and bent-knee.\n" +
+      "- Progress anchor lifts from their last top set when the week allows, hold the load when it doesn't.\n" +
+      "- Every entry in 'adjustments' is a reason to change this week — act on each one (lighter lower work, " +
+      "a gentler opening, a reintroduction at moderate load) and say so in the affected session's rationale.\n" +
+      "- Bias toward what the data says is neglected, and don't repeat what plannedBeforeWeek already covers.\n" +
+      "- Prefer movements from the anchor list. Introduce a new one only when it serves the week better than " +
+      "anything familiar, and give it one short form cue.\n\n" +
+      "Recovery comes from easy days being genuinely easy, not from days off: keep the add-ons on easy days " +
+      "light and keep leg-taxing work off the days around the long run.\n\n" +
+      todayContext(),
     userText:
       "Plan this athlete's week from the following data. Everything here is computed from their logs — treat it " +
       "as fact and do not restate it back.\n\n" +

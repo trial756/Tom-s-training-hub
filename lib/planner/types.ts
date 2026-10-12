@@ -105,6 +105,16 @@ export interface LiftAnchor {
   regions: MuscleRegion[];
 }
 
+/** The week's lifting dose — set in code from the block position. */
+export interface StrengthDose {
+  mode: "base" | "maintain" | "taper" | "build";
+  /** Lift sessions the week should carry (lift or lift_and_run). */
+  liftSessions: number;
+  /** How many of those are heavy lower-body sessions. */
+  heavyLower: number;
+  guidance: string;
+}
+
 /**
  * Everything the generator is allowed to reason from — computed in code so
  * the model never has to infer history, only plan against it.
@@ -136,6 +146,13 @@ export interface PlannerContext {
   /** Typical single-run distance, used when sizing an added run. */
   typicalRunMiles: number;
   anchors: LiftAnchor[];
+  strengthDose: StrengthDose;
+  /** Last fortnight of runs, newest first — how hard they were and how they felt. */
+  recentRuns: { date: string; type: string | null; miles: number | null; feel: string | null }[];
+  /** Last few lift sessions, newest first, so the week can rotate movements rather than repeat them. */
+  recentLifts: { date: string; summary: string; exercises: string[] }[];
+  /** Readiness flags computed from the logs; the planner backs off when any are set. */
+  adjustments: string[];
   /** Set when planning a week ahead: what the current week still has scheduled. */
   plannedBeforeWeek?: {
     note: string;

@@ -108,7 +108,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         .order("logged_at", { ascending: false }),
       db
         .from("runs")
-        .select("logged_at, distance_miles, run_type, summary")
+        .select("logged_at, distance_miles, run_type, summary, feel")
         .gte("logged_at", historyStart.toISOString())
         .order("logged_at", { ascending: false }),
       db.from("exercise_muscles").select("key, primary_muscles, secondary_muscles"),

@@ -2,6 +2,7 @@ import { daysBetweenKeys, localDateKey, normalizeExerciseName, shiftDays, startO
 import { MUSCLE_LABELS, MUSCLE_REGIONS, type MuscleRegion } from "@/lib/muscles";
 import { buildExerciseLookup, computeMuscleActivity, type ExerciseLookup } from "@/lib/muscleCoverage";
 import { buildMarathonPlan, currentWeek, RACE_DATE } from "@/lib/marathonPlan";
+import { strengthDoseFor } from "@/lib/planner/strength";
 import type { LiftAnchor, PlannerContext, RegionSnapshot } from "@/lib/planner/types";
 
 /** A region counts as neglected once it's gone this long without direct work. */
@@ -21,6 +22,7 @@ export interface PlannerRunRow {
   distance_miles?: number | null;
   run_type?: string | null;
   summary?: string | null;
+  feel?: string | null;
 }
 
 /**
@@ -176,6 +178,59 @@ export function buildPlannerContext(opts: {
     .sort((a, b) => b.sessions - a.sessions || (b.lastDate ?? "").localeCompare(a.lastDate ?? ""))
     .slice(0, 20);
 
+  // ── Recent sessions and readiness ─────────────────────────────────────
+  const byNewest = <T extends { logged_at: string }>(rows: T[]) =>
+    [...rows].sort((a, b) => b.logged_at.localeCompare(a.logged_at));
+
+  const recentRuns = byNewest(windowRuns).slice(0, 8).map((r) => ({
+    date: localDateKey(new Date(r.logged_at)),
+    type: r.run_type ?? null,
+    miles: r.distance_miles != null ? Number(r.distance_miles) : null,
+    feel: r.feel ?? null,
+  }));
+
+  const recentLifts = byNewest(windowWorkouts).slice(0, 5).map((w) => ({
+    date: localDateKey(new Date(w.logged_at)),
+    summary: w.summary || (w.muscle_groups ?? []).join(", ") || "Workout",
+    exercises: (w.exercises ?? []).map((e) => e?.name ?? "").filter(Boolean),
+  }));
+
+  const adjustments: string[] = [];
+  const lastWeekKey = localDateKey(shiftDays(today, -7));
+  const roughRuns = recentRuns.filter((r) => r.date >= lastWeekKey && /tough|rough/i.test(r.feel ?? "")).length;
+  if (roughRuns >= 2) {
+    adjustments.push(
+      `${roughRuns} runs in the last 7 days felt tough or rough — accumulated fatigue. Swap the heavy lower session ` +
+        "for single-leg control and calves at moderate load this week, and keep every easy run genuinely easy."
+    );
+  }
+  const lastRun = recentRuns[0];
+  if (lastRun && /rough/i.test(lastRun.feel ?? "") && daysBetweenKeys(lastRun.date, todayKey) <= 1) {
+    adjustments.push("The most recent run felt rough. Open the week gently — no leg-taxing work in the first two days.");
+  }
+  if (marathon && avgWeeklyMiles > 0 && marathon.weeklyMileage >= avgWeeklyMiles * 1.3) {
+    adjustments.push(
+      `This week's mileage target (${marathon.weeklyMileage}mi) is well above recent volume (${avgWeeklyMiles}mi/wk). ` +
+        "The running is the bigger stress this week: keep lower-body lifting at the dose's minimum — same load, fewer sets."
+    );
+  }
+  const lowerStale = regions.filter(
+    // primarySets counts lifting only — run miles credit these regions separately.
+    (r) => ["quads", "hamstrings", "glutes", "calves"].includes(r.region) && r.primarySets === 0
+  );
+  if (lowerStale.length) {
+    adjustments.push(
+      `No direct lifting for ${lowerStale.map((r) => r.label.toLowerCase()).join(", ")} in the last two weeks (running aside). ` +
+        "Bring lower-body strength back in at moderate load before going heavy."
+    );
+  }
+
+  const strengthDose = strengthDoseFor({
+    marathon,
+    postRace: !marathon && weekStart > RACE_DATE,
+    liftDaysPerWeek,
+  });
+
   const fromKey = todayKey > weekStart ? todayKey : weekStart;
   const daysRemaining = Math.max(0, daysBetweenKeys(fromKey, weekEnd) + 1);
 
@@ -195,6 +250,10 @@ export function buildPlannerContext(opts: {
     avgWeeklyMiles,
     typicalRunMiles,
     anchors,
+    strengthDose,
+    recentRuns,
+    recentLifts,
+    adjustments,
     ...(opts.plannedBeforeWeek?.length
       ? {
           plannedBeforeWeek: {
