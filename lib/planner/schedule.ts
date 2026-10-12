@@ -164,7 +164,8 @@ export function scheduleWeek(opts: {
     }
   }
 
-  // Key run days are now known; keep leg-taxing lifts off their neighbours.
+  // Key run days are now known; keep leg-taxing lifts off their neighbours,
+  // and keep hard days apart from each other — hard days hard, easy days easy.
   const keyRunDates = new Set(
     Array.from(assignment.entries())
       .filter(([, id]) => {
@@ -173,18 +174,30 @@ export function scheduleWeek(opts: {
       })
       .map(([date]) => date)
   );
-  const adjacentToKeyRun = (date: string) => {
-    for (const key of keyRunDates) {
+  const hardDates = new Set(
+    Array.from(assignment.entries())
+      .filter(([, id]) => byId.get(id)?.taxesLegs)
+      .map(([date]) => date)
+  );
+  const adjacentTo = (dates: Set<string>, date: string) => {
+    for (const key of dates) {
       if (Math.abs(daysBetweenKeys(key, date)) === 1) return true;
     }
     return false;
   };
 
-  for (const session of [...pending]) {
+  // Leg-taxing sessions choose their days first, while there's still room
+  // to space them out; the easy work fills in around them.
+  const placeOrder = [...pending].sort((a, b) => Number(b.taxesLegs) - Number(a.taxesLegs));
+  for (const session of placeOrder) {
     if (openDays.length === 0) break;
-    const preferred = session.taxesLegs ? openDays.find((d) => !adjacentToKeyRun(d)) : undefined;
+    const preferred = session.taxesLegs
+      ? openDays.find((d) => !adjacentTo(keyRunDates, d) && !adjacentTo(hardDates, d)) ??
+        openDays.find((d) => !adjacentTo(keyRunDates, d))
+      : undefined;
     const date = preferred ?? openDays[0];
     take(date, session);
+    if (session.taxesLegs) hardDates.add(date);
     pending.splice(pending.indexOf(session), 1);
   }
 
