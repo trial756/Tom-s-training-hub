@@ -159,3 +159,60 @@ export function reconcileMileage(opts: {
 
   return { gap, added, residual, note: parts.join(" ") || null, sessions, days };
 }
+
+/** A freshly generated week may run this far over its mileage target before easy runs are trimmed. */
+const OVERSHOOT_ALLOWANCE = 1.15;
+/** An easy run is never trimmed below this — shorter isn't worth lacing up for. */
+const MIN_EASY_RUN_MILES = 2;
+
+const isLongRun = (s: PlanSession) =>
+  isRun(s) && (s.run?.type === "Long" || (!s.run?.type && /\blong\b/i.test(s.title)));
+
+/** Rewrites the first distance in a title to match the planned miles ("Long run — 18mi…" planned at 16 → "16mi"). */
+function syncTitleMiles(s: PlanSession) {
+  if (!s.miles) return;
+  s.title = s.title.replace(/(\d+(?:\.\d+)?)(\s?mi\b)/i, (match, n, unit) => (Number(n) === s.miles ? match : `${s.miles}${unit}`));
+}
+
+/**
+ * Holds a freshly generated week to its marathon targets, in code rather than
+ * trusting the model's arithmetic: the long run is the block's long-run
+ * distance, every title states the miles actually planned, and if the week
+ * would land well over its mileage target the easy runs give way first —
+ * never the long run or the quality sessions.
+ */
+export function fitWeekToTargets(
+  input: PlanSession[],
+  opts: { weeklyTarget: number | null; longRunMiles: number | null; milesAlreadyRun: number }
+): { sessions: PlanSession[]; note: string | null } {
+  const sessions = input.map((s) => ({ ...s }));
+  const notes: string[] = [];
+
+  const long = sessions.find(isLongRun);
+  if (long && opts.longRunMiles && long.miles !== opts.longRunMiles) {
+    notes.push(`long run set to the block's ${opts.longRunMiles}mi (was ${long.miles ?? "?"})`);
+    long.miles = opts.longRunMiles;
+  }
+
+  if (opts.weeklyTarget && opts.weeklyTarget > 0) {
+    const ceiling = Math.round(opts.weeklyTarget * OVERSHOOT_ALLOWANCE * 10) / 10;
+    const total = () => opts.milesAlreadyRun + sessions.reduce((sum, s) => sum + (isRun(s) ? s.miles ?? 0 : 0), 0);
+    let over = Math.round((total() - ceiling) * 10) / 10;
+    if (over > 0) {
+      // Longest easy runs give first, so the cut is spread rather than one run gutted.
+      const easy = sessions
+        .filter((s) => isRun(s) && !s.taxesLegs && !isLongRun(s) && (s.miles ?? 0) > MIN_EASY_RUN_MILES)
+        .sort((a, b) => (b.miles ?? 0) - (a.miles ?? 0));
+      for (const s of easy) {
+        if (over <= 0) break;
+        const cut = Math.min(over, (s.miles ?? 0) - MIN_EASY_RUN_MILES);
+        s.miles = Math.round(((s.miles ?? 0) - cut) * 10) / 10;
+        over = Math.round((over - cut) * 10) / 10;
+      }
+      notes.push(`easy runs trimmed to keep the week near ${opts.weeklyTarget}mi`);
+    }
+  }
+
+  for (const s of sessions) if (isRun(s)) syncTitleMiles(s);
+  return { sessions, note: notes.length ? notes.join("; ") : null };
+}

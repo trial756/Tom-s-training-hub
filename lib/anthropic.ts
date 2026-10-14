@@ -710,11 +710,15 @@ export async function generateWeekPlan(contextJson: string): Promise<GeneratedWe
   let plan = await requestWeekPlan(contextJson, dose?.mode === "build", "");
   // The week always carries gym work — running owning the legs changes what
   // the lifting is, not whether it happens. One retry with that spelled out.
-  if (liftTarget > 0 && liftCount(plan) === 0) {
+  // Short by more than one session — the model tends to swap gym days for
+  // light accessory blocks — gets one retry with the count spelled out.
+  if (liftTarget > 0 && liftCount(plan) < liftTarget - 1) {
     plan = await requestWeekPlan(
       contextJson,
       dose?.mode === "build",
-      `\n\nThe week needs ${liftTarget} lift session(s) per the strengthDose — ${dose?.guidance ?? "upper body and core away from the key runs"}`
+      `\n\nThe week needs ${liftTarget} lift session(s) ('lift' or 'lift_and_run') per the strengthDose, and your ` +
+        `last attempt had ${liftCount(plan)}. Turn accessory-only days into real gym sessions — ` +
+        `${dose?.guidance ?? "upper body and core away from the key runs"}`
     );
   }
   if (!plan.sessions?.length) throw new Error("The planner returned no sessions for this week. Try again.");
@@ -728,7 +732,10 @@ const MARATHON_FRAME =
   "base. Running is the priority: the long run and any goal-pace or interval work are the sessions that must " +
   "happen, and everything else arranges itself around them. Lifting serves the running — it makes the athlete " +
   "durable — and its volume is what yields when the week is tight. Plan the week's runs to reach the mileage " +
-  "target rather than repeating last week's distances.\n\n";
+  "target rather than repeating last week's distances: milesThisWeek plus the planned runs should land on " +
+  "the target and never more than about 15% over it, and the long run is exactly marathon.longRunMiles. Code " +
+  "enforces both, trimming easy runs if the week runs over. Marathon-pace work inside a long run stays to " +
+  "the final 3-5 miles in this build; longer goal-pace blocks belong in their own midweek session.\n\n";
 
 const BUILD_FRAME =
   "You are a strength and conditioning coach planning one training week (Sunday–Saturday) for an athlete who " +

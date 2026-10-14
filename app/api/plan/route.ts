@@ -6,7 +6,7 @@ import { cleanRegions } from "@/lib/muscles";
 import { buildExerciseLookup } from "@/lib/muscleCoverage";
 import { buildPlannerContext } from "@/lib/planner/context";
 import { scheduleWeek, type DayLog } from "@/lib/planner/schedule";
-import { reconcileMileage } from "@/lib/planner/mileage";
+import { fitWeekToTargets, reconcileMileage } from "@/lib/planner/mileage";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
 import { buildMarathonPlan, currentWeek } from "@/lib/marathonPlan";
 import { RUN_TYPES, type RunType } from "@/lib/types";
@@ -155,7 +155,11 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
 
     async function generate(week: string, context: ReturnType<typeof buildPlannerContext>): Promise<StoredWeek> {
       const generated = await generateWeekPlan(JSON.stringify(context, null, 2));
-      const sessions = toSessions(generated.sessions ?? []);
+      const { sessions } = fitWeekToTargets(toSessions(generated.sessions ?? []), {
+        weeklyTarget: context.marathon?.weeklyMileage ?? null,
+        longRunMiles: context.marathon?.longRunMiles ?? null,
+        milesAlreadyRun: context.milesThisWeek,
+      });
       const row = {
         week_start: week,
         plan_week: context.marathon?.planWeek ?? null,
