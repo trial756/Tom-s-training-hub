@@ -99,6 +99,8 @@ export function reconcileMileage(opts: {
     const bump = Math.min(remaining, Math.max(1, Math.round((session.miles ?? runSize) * 0.5)));
     session.miles = Math.round(((session.miles ?? 0) + bump) * 10) / 10;
     session.title = `${session.title.replace(/\s*\d+(\.\d+)?mi\b/, "")} ${session.miles}mi`.replace(/\s+/g, " ").trim();
+    // A written breakdown would no longer add up; the extra is easy running.
+    if (session.run?.structure) session.run = { ...session.run, structure: `${session.run.structure} · +${bump} mi easy` };
     session.addedByReconciler = true;
     remaining = Math.round((remaining - bump) * 10) / 10;
     added += bump;
@@ -136,6 +138,7 @@ export function reconcileMileage(opts: {
       preferredDow: null,
       taxesLegs: false,
       miles: Math.round(miles * 10) / 10,
+      run: { type: "Easy", structure: null },
       addedByReconciler: true,
     };
     sessions.push(addition);

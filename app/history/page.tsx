@@ -5,6 +5,8 @@ import PageHeader from "@/components/PageHeader";
 import Spinner from "@/components/Spinner";
 import CoachingNote from "@/components/CoachingNote";
 import UndoToast from "@/components/UndoToast";
+import WorkoutEditor from "@/components/WorkoutEditor";
+import Link from "next/link";
 import type { Favorite, Meal, Run, Workout } from "@/lib/types";
 import { formatDuration, formatLoggedAt, formatPace, summarizeExerciseNames } from "@/lib/format";
 import { notifyDataChanged } from "@/lib/refresh";
@@ -71,6 +73,7 @@ export default function HistoryPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadAll();
@@ -257,6 +260,14 @@ export default function HistoryPage() {
               expanded={expanded.has(e.item.id)}
               onToggleExpand={() => toggleExpand(e.item.id)}
               onDelete={() => requestDeleteEntry(e.kind, e.item)}
+              editing={editingId === e.item.id}
+              onEdit={() => setEditingId(e.item.id)}
+              onCancelEdit={() => setEditingId(null)}
+              onSaved={(w) => {
+                setWorkouts((prev) => prev.map((x) => (x.id === w.id ? w : x)));
+                setEditingId(null);
+                notifyDataChanged("workout");
+              }}
             />
           ))}
         </div>
@@ -278,11 +289,19 @@ function HistoryCard({
   expanded,
   onToggleExpand,
   onDelete,
+  editing,
+  onEdit,
+  onCancelEdit,
+  onSaved,
 }: {
   entry: Entry;
   expanded: boolean;
   onToggleExpand: () => void;
   onDelete: () => void;
+  editing: boolean;
+  onEdit: () => void;
+  onCancelEdit: () => void;
+  onSaved: (w: Workout) => void;
 }) {
   const { kind, item } = entry;
   const kindColor = kind === "workout" ? "bg-accent/20 text-accent" : kind === "run" ? "bg-run/20 text-run" : "bg-fuel/20 text-fuel";
@@ -342,8 +361,24 @@ function HistoryCard({
         </button>
       </button>
 
-      {expanded && (
+      {expanded && kind === "workout" && editing && (
+        <div className="mt-3 border-t border-base-700 pt-3">
+          <WorkoutEditor workout={item} onSaved={onSaved} onCancel={onCancelEdit} />
+        </div>
+      )}
+
+      {expanded && !(kind === "workout" && editing) && (
         <div className="mt-3 space-y-3 border-t border-base-700 pt-3">
+          {kind === "workout" && (
+            <button type="button" onClick={onEdit} className="btn-secondary w-full text-sm">
+              Edit workout
+            </button>
+          )}
+          {kind === "run" && (
+            <Link href={`/runs?edit=${item.id}`} className="btn-secondary block w-full text-center text-sm">
+              Edit run
+            </Link>
+          )}
           {kind === "workout" && item.exercises.length > 0 && (
             <div className="space-y-2">
               {item.exercises.map((ex, i) => (
