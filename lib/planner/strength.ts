@@ -34,64 +34,66 @@ export function strengthDoseFor(opts: {
   if (!marathon) {
     return {
       mode: "base",
-      liftSessions: clamp(2, 3),
+      liftSessions: clamp(3, 4),
       heavyLower: 1,
-      guidance: "No race block is active. Two to three full-body or upper/lower sessions around easy running.",
+      guidance: "No race block is active. Three to four upper/lower sessions around easy running.",
     };
   }
 
   if (marathon.isRaceWeek || marathon.daysToRace <= 10) {
     return {
       mode: "taper",
-      liftSessions: 1,
+      liftSessions: 2,
       heavyLower: 0,
       guidance:
-        "Final ten days. No heavy or new lifting and nothing that leaves soreness: one short session of " +
-        "bodyweight core, glute activation and upper-body maintenance at most. Mobility and strides carry the rest.",
+        "Final ten days. No heavy or new lifting and nothing that leaves soreness: two short upper-body and core " +
+        "maintenance sessions at familiar loads, no legs beyond glute activation. Mobility and strides carry the rest.",
     };
   }
 
   if (marathon.phase === "Taper") {
     return {
       mode: "taper",
-      liftSessions: clamp(1, 2),
+      liftSessions: clamp(3, 3),
       heavyLower: 1,
       guidance:
         "Taper: keep the weight on the bar but cut the volume about in half — one lower session of two or three " +
-        "working sets at the usual load, no plyometrics to fatigue, no new movements. Upper and core stay light.",
+        "working sets at the usual load, no plyometrics to fatigue, no new movements. Two upper-body sessions at " +
+        "normal load with a set less than usual.",
     };
   }
 
   if (marathon.isRecoveryWeek) {
     return {
       mode: "maintain",
-      liftSessions: clamp(2, 3),
+      liftSessions: clamp(3, 4),
       heavyLower: 0,
       guidance:
         "Cutback week: the body is absorbing load, so lower-body work drops to single-leg control, calves and hip " +
-        "stability at moderate weight. Upper body and core can carry on as normal.",
+        "stability at moderate weight. Upper body trains heavy as normal — push and pull sessions.",
     };
   }
 
   if (marathon.phase === "Peak") {
     return {
       mode: "maintain",
-      liftSessions: clamp(2, 3),
+      liftSessions: clamp(4, 4),
       heavyLower: 1,
       guidance:
-        "Peak: the running is the stimulus, lifting holds strength without adding fatigue. One heavy lower " +
-        "session (3 sets of 4-6, two reps in reserve, about a third less volume than a build) stacked onto a " +
-        "quality-run day, one light power/single-leg session, and upper body plus core.",
+        "Peak: the running is the leg stimulus, so lower-body lifting holds strength without adding fatigue — one " +
+        "heavy lower session (3 sets of 4-6, two reps in reserve) stacked onto a quality-run day. Upper body is " +
+        "unaffected by the mileage and trains heavy: a push session, a pull session, and a third upper session " +
+        "(shoulders, arms or a second push/pull), each a real gym session.",
     };
   }
 
   return {
     mode: "base",
-    liftSessions: clamp(2, 3),
+    liftSessions: clamp(4, 5),
     heavyLower: 1,
     guidance:
       "Building: two lower sessions — one heavy (4-5 sets of 4-6, two reps in reserve) stacked onto a " +
-      "quality-run day, one lighter power/single-leg session — plus one upper-body and core session.",
+      "quality-run day, one lighter power/single-leg session — plus heavy push and pull upper-body sessions.",
   };
 }
 
@@ -106,5 +108,6 @@ export const STRENGTH_PRINCIPLES = [
   "Calves (straight-leg and bent-knee, slow eccentrics) and hip stability (glute medius, adductors) get direct work every week — that's where running injuries start.",
   "Core is anti-rotation and anti-extension (Pallof press, dead bugs, side planks, Copenhagen planks), at least twice a week, usually riding along with an easy run.",
   "Dynamic before, static after: a key run carries a short dynamic warm-up (leg swings, A-skips, walking lunges); long static holds and foam rolling go in the mobility block after easy runs.",
-  "Upper body is pulling-biased (rows, pull-ups, face pulls) with pressing to balance — posture and arm drive, not size, until the race is done.",
+  "Upper body isn't where running fatigue lives, so it trains heavy in every phase but the final ten days: real push and pull sessions (compound lifts at 4-8 reps, progressed from the anchor list, plus accessories), not a few curls tacked onto a core block. Lean slightly toward pulling for posture.",
+  "Never two days in a row without a gym session ('lift' or 'lift_and_run'); an accessory or mobility block doesn't count. The day before the long run is an upper-body day — it doesn't touch the legs — not an accessory day.",
 ];
