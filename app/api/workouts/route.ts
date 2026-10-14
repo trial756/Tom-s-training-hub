@@ -1,40 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { parseWorkoutEntry, type ParsedWorkout } from "@/lib/anthropic";
-import { APP_TIMEZONE, normalizeExerciseName } from "@/lib/format";
-import { cleanRegions } from "@/lib/muscles";
-import type { Exercise } from "@/lib/types";
+import { parseWorkoutEntry } from "@/lib/anthropic";
+import { buildWorkoutHistoryContext, recordExerciseMuscles } from "@/lib/workoutLog";
 
 export const runtime = "nodejs";
-
-/**
- * Files any exercise the parser hasn't seen before into the exercise →
- * muscle lookup. First tagging wins: existing rows (including hand-seeded
- * and hand-corrected ones) are never overwritten, so fixing a bad tag is a
- * one-row edit that applies to every session using that movement.
- *
- * Failures are swallowed — this is secondary bookkeeping and must never
- * fail a workout that already saved.
- */
-async function recordExerciseMuscles(parsed: ParsedWorkout) {
-  try {
-    const byKey = new Map<string, { key: string; display_name: string; primary_muscles: string[]; secondary_muscles: string[]; source: string }>();
-    for (const ex of parsed.exercises ?? []) {
-      const key = normalizeExerciseName(ex.name ?? "");
-      if (!key || byKey.has(key)) continue;
-      const primary = cleanRegions(ex.primary_muscles);
-      const secondary = cleanRegions(ex.secondary_muscles).filter((r) => !primary.includes(r));
-      if (primary.length === 0 && secondary.length === 0) continue;
-      byKey.set(key, { key, display_name: ex.name, primary_muscles: primary, secondary_muscles: secondary, source: "ai" });
-    }
-    if (byKey.size === 0) return;
-    await supabaseAdmin()
-      .from("exercise_muscles")
-      .upsert(Array.from(byKey.values()), { onConflict: "key", ignoreDuplicates: true });
-  } catch {
-    // Non-critical.
-  }
-}
 
 export async function GET(req: NextRequest) {
   const limit = Number(req.nextUrl.searchParams.get("limit") ?? 50);
@@ -48,28 +17,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ workouts: data });
-}
-
-function summarizeExercises(exercises: Exercise[]): string {
-  return (exercises ?? [])
-    .map((e) => `${e.name}: ${(e.sets ?? []).map((s) => `${s.weight ?? "?"}${s.weight_unit ?? ""}x${s.reps ?? "?"}`).join(",")}`)
-    .join(" | ");
-}
-
-async function buildWorkoutHistoryContext(): Promise<string> {
-  const { data } = await supabaseAdmin()
-    .from("workouts")
-    .select("logged_at, exercises, muscle_groups")
-    .order("logged_at", { ascending: false })
-    .limit(10);
-
-  return (data ?? [])
-    .map((w) => {
-      const date = new Date(w.logged_at).toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, month: "short", day: "numeric", year: "numeric" });
-      const groups = (w.muscle_groups ?? []).length ? ` [${(w.muscle_groups ?? []).join(", ")}]` : "";
-      return `${date}${groups} — ${summarizeExercises(w.exercises ?? [])}`;
-    })
-    .join("\n");
 }
 
 export async function POST(req: NextRequest) {

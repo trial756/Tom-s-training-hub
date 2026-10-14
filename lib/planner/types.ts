@@ -1,4 +1,5 @@
 import type { MuscleRegion } from "@/lib/muscles";
+import type { RunType } from "@/lib/types";
 
 /** What a day's session asks for. */
 export type PlanDayKind = "lift" | "run" | "lift_and_run" | "active_recovery" | "rest";
@@ -36,6 +37,8 @@ export interface PlanSession {
   taxesLegs: boolean;
   /** Planned distance for run sessions, so weekly mileage can be reconciled. */
   miles: number | null;
+  /** What the run is. Target paces are derived from the type in code (lib/planner/runPlan). */
+  run?: { type: RunType | null; structure: string | null } | null;
   /** Set when the reconciler added or lengthened this run to close a gap. */
   addedByReconciler?: boolean;
 }
@@ -53,6 +56,9 @@ export interface PlanDay {
   status: PlanDayStatus;
   /** Set once the day is in the past and something was logged. */
   loggedSummary: string | null;
+  /** What has been logged on this day so far, so each half of a run + lift day can show as done. */
+  loggedRun?: boolean;
+  loggedLift?: boolean;
 }
 
 /** One training week touched by the day strip. */

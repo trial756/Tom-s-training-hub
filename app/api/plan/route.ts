@@ -9,6 +9,7 @@ import { scheduleWeek, type DayLog } from "@/lib/planner/schedule";
 import { reconcileMileage } from "@/lib/planner/mileage";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
 import { buildMarathonPlan, currentWeek } from "@/lib/marathonPlan";
+import { RUN_TYPES, type RunType } from "@/lib/types";
 
 const marathonWeeks = buildMarathonPlan();
 
@@ -35,6 +36,13 @@ function toSessions(generated: GeneratedSession[]): PlanSession[] {
     preferredDow: s.preferred_dow != null && s.preferred_dow >= 0 && s.preferred_dow <= 6 ? s.preferred_dow : null,
     taxesLegs: !!s.taxes_legs,
     miles: typeof s.miles === "number" && s.miles > 0 ? s.miles : null,
+    run:
+      s.kind === "run" || s.kind === "lift_and_run"
+        ? {
+            type: s.run?.run_type && (RUN_TYPES as readonly string[]).includes(s.run.run_type) ? (s.run.run_type as RunType) : null,
+            structure: s.run?.structure?.trim() || null,
+          }
+        : null,
     exercises: (s.exercises ?? []).map((e) => ({
       name: e.name,
       sets: Number(e.sets) || 3,
@@ -286,6 +294,8 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
                 isKeyRunDay: false,
                 status: logged ? "done" : "missed",
                 loggedSummary: logged ? log.summary : null,
+                loggedRun: !!log?.hasRun,
+                loggedLift: !!log?.hasWorkout,
               };
             });
         results.push({ meta: { ...baseMeta, headline: stored?.headline ?? "", pending: false }, sessions: stored?.sessions ?? [], days });

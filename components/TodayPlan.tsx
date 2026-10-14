@@ -4,6 +4,13 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { MUSCLE_LABELS, type MuscleRegion } from "@/lib/muscles";
 import type { PlanDay, PlanSession, WeekPlan } from "@/lib/planner/types";
+import {
+  formatPaceRange,
+  liftPrefill,
+  liftRegionsFor,
+  plannedRunFor,
+  runPrefillQuery,
+} from "@/lib/planner/runPlan";
 
 const DOW = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -25,16 +32,6 @@ const KIND_LABEL: Record<PlanSession["kind"], string> = {
 
 function dayName(date: string): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
-}
-
-/** Turns a session into text the Log tab can start from. */
-function prefillFor(session: PlanSession): string {
-  if (session.exercises.length === 0) return session.title;
-  const lines = session.exercises.map((e) => {
-    const load = e.target ? ` @ ${e.target}` : "";
-    return `${e.name} ${e.sets}x${e.reps}${load}`;
-  });
-  return `${session.title}: ${lines.join(", ")}`;
 }
 
 export default function TodayPlan({
@@ -77,6 +74,9 @@ export default function TodayPlan({
   const headline = isCurrentWeek ? plan.headline : week?.headline ?? "";
   const pending = !!week?.pending;
   const isFuture = todayKey != null && (selected?.date ?? "") > todayKey;
+  const run = session ? plannedRunFor(session) : null;
+  const liftRegions = session ? liftRegionsFor(session) : [];
+  const canLog = !!session && session.kind !== "rest" && selected?.status !== "done" && !isFuture;
 
   // Strip grouped by training week, so the Sunday boundary is visible.
   const groups = weeks
@@ -197,9 +197,32 @@ export default function TodayPlan({
 
         {session?.rationale && <p className="mb-3 text-sm leading-snug text-muted">{session.rationale}</p>}
 
-        {session && session.regions.length > 0 && (
+        {run && (
+          <div className="mb-3 rounded-lg border border-run/30 bg-run/5 p-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-sm font-semibold text-ink">
+                {run.miles ? `${run.miles} mi · ` : ""}
+                {run.type}
+              </span>
+              {run.pace && (
+                <span className="shrink-0 text-sm font-semibold text-run">
+                  {formatPaceRange(run.pace)}
+                  <span className="text-xs font-normal text-muted">/mi</span>
+                </span>
+              )}
+            </div>
+            {run.structure && <p className="mt-1 text-xs leading-snug text-muted">{run.structure}</p>}
+            {run.easyPace && (
+              <p className="mt-1 text-[11px] text-faint">
+                Warm-up, cool-down and recoveries at {formatPaceRange(run.easyPace)}/mi
+              </p>
+            )}
+          </div>
+        )}
+
+        {session && liftRegions.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
-            {session.regions.map((r) => (
+            {liftRegions.map((r) => (
               <span key={r} className="pill bg-accent/15 text-accent">
                 {MUSCLE_LABELS[r as MuscleRegion] ?? r}
               </span>
@@ -227,19 +250,28 @@ export default function TodayPlan({
           </ul>
         )}
 
-        <div className="mt-3 flex gap-2">
-          {session && session.kind !== "rest" && selected?.status !== "done" && !isFuture && (
-            <Link
-              href={
-                session.kind === "run"
-                  ? "/runs"
-                  : `/log?prefill=${encodeURIComponent(prefillFor(session))}&date=${selected?.date ?? ""}`
-              }
-              className="btn-primary flex-1 text-center text-sm"
-            >
-              Log this
-            </Link>
-          )}
+        {canLog && (run || session.exercises.length > 0) && (
+          <div className="mt-3 flex gap-2">
+            {run && (
+              <LogButton
+                href={`/runs?${runPrefillQuery(session, selected?.date ?? null)}`}
+                done={!!selected?.loggedRun}
+                label="Log run"
+                primary
+              />
+            )}
+            {session.exercises.length > 0 && (
+              <LogButton
+                href={`/log?prefill=${encodeURIComponent(liftPrefill(session))}&date=${selected?.date ?? ""}`}
+                done={!!selected?.loggedLift}
+                label={!run ? "Log this" : session.kind === "lift_and_run" ? "Log lift" : "Log mobility"}
+                primary={!run || session.kind === "lift_and_run"}
+              />
+            )}
+          </div>
+        )}
+
+        <div className="mt-2 flex gap-2">
           {/* The past is fixed; a future week can be replanned like this one. */}
           {!isPastWeek && !pending && (
             <button
@@ -257,3 +289,19 @@ export default function TodayPlan({
 }
 
 export type { PlanDay };
+
+/** One half of a day's session — a ✓ once that half is logged, so the other stays reachable. */
+function LogButton({ href, done, label, primary }: { href: string; done: boolean; label: string; primary: boolean }) {
+  if (done) {
+    return (
+      <span className="flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-accent/40 text-sm font-medium text-accent">
+        ✓ {label.replace(/^Log /, "")} logged
+      </span>
+    );
+  }
+  return (
+    <Link href={href} className={`${primary ? "btn-primary" : "btn-secondary"} flex-1 text-center text-sm`}>
+      {label}
+    </Link>
+  );
+}

@@ -46,7 +46,8 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 ### Today (home tab — this is the default landing tab)
 - **Week plan**: an 11-day strip with today in the middle (5 back, 5 ahead), scrolling sideways and labelled by training week, showing each day's state (done / off-script / missed / today / upcoming) and a card for the selected day. Training weeks stay Sunday–Saturday; the strip stitches together the two or three weeks it touches, and next week is planned as soon as it enters the strip — session title, why it's there, target muscle regions, and exercises with loads anchored to recent top sets. Movements with no history get a one-line form cue and a "new" tag.
 - **No off days.** Every day is a training day, and light work is stacked to save time: an easy run carries a mobility / yoga / stretch / core block in the same session, so mobility never takes a day of its own and the freed day goes to a lift or quality work. Recovery comes from easy days staying easy.
-- "Log this" opens the Log tab prefilled with the session; "Replan week" forces regeneration.
+- **Run block** on any day with a run: miles, run type, target pace and the breakdown (warm-up / reps / cool-down). Target paces always come from the pace zones in code (`lib/planner/runPlan.ts`), never the model; structured runs also show the easy pace for warm-up and recoveries. Lift muscle chips come from the exercises only, so a pull day doesn't show the run's leg regions.
+- **Logging splits by half.** A run + lift day gets "Log run" and "Log lift" (a run + mobility day: "Log run" and "Log mobility"); each flips to ✓ once that half is logged. "Log run" opens the Runs form prefilled (type, distance, pace for steady runs, the plan's target in notes); "Log lift" opens the Log tab one exercise per line. Everything stays editable. "Replan week" forces regeneration.
 - **Body Map**: front/back figure, 17 muscle regions, filled by a rolling 7-day window (toggleable to all-time). Gym load fills green, run load teal — running credits quads/hamstrings/glutes/calves, otherwise a marathoner's legs read as neglected. Tap a region for last-trained and set counts.
 - Stats (below the plan) — everything in the section that follows, with the trend charts in a snap-scrolling carousel.
 
@@ -73,6 +74,8 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
   - Feel chips: 🔥 Great / 😊 Good / 😐 Okay / 😓 Tough / 💀 Rough
 - **Duration & Avg Pace auto-format colons as digits are typed**, building from the right: last 2 digits = seconds, next 2 = minutes, rest = hours. E.g. typing `10517` → `1:05:17`; typing `844` → `8:44`.
 - "Copy last run" button prefills type/surface/shoes from most recent run
+- "Today's plan" banner with **Use plan** when today has an unlogged planned run
+- **Edit**: each recent run (and "Edit run" in History) reopens this form filled in and saves over the original (`PATCH /api/runs/[id]`, no AI call). Of distance / time / pace, whichever wasn't touched is recomputed from the ones that were
 - Search bar; pace vs. 8:01 goal color-coded (green=ahead, amber=close, red=slow)
 
 ### Fuel (meal entry)
@@ -86,6 +89,7 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 - Search bar + type filter chips (all/strength/cardio/hiit/flexibility/run/other)
 - Expandable cards: exercise count, calorie estimate, intensity score (X/10, color-coded), muscle group tags (first one highlighted, rest muted)
 - Expanded view: per-exercise sub-cards (name, sets×reps, weight, notes), Coach Feedback, **"vs Last Time" comparison**, Adjustments, Pattern note, delete
+- **Edit workout**: inline row editor (exercise name, per-set reps × weight, add/remove sets and exercises, date, notes) that saves exactly as typed with no AI call (`PATCH /api/workouts/[id]`); "Re-parse from text" re-runs the parser for bigger rewrites
 
 ### Marathon
 - Live countdown to race day

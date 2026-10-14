@@ -51,6 +51,15 @@ export default function LogPage() {
     }
   }, []);
 
+  // Grow the box to fit what's in it — a plan prefill is one exercise per
+  // line, and every line should be visible to edit without scrolling inside.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [text]);
+
   async function loadRecent() {
     setLoadingRecent(true);
     try {

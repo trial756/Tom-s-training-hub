@@ -226,6 +226,8 @@ export function scheduleWeek(opts: {
       isKeyRunDay: session ? isKeyRun(session) : false,
       status,
       loggedSummary: log && (log.hasWorkout || log.hasRun) ? log.summary : null,
+      loggedRun: !!log?.hasRun,
+      loggedLift: !!log?.hasWorkout,
     };
   });
 }

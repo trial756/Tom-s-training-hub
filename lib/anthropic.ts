@@ -572,6 +572,7 @@ export interface GeneratedSession {
   preferred_dow: number | null;
   taxes_legs: boolean;
   priority: number;
+  run: { run_type: string; structure: string | null } | null;
   exercises: GeneratedExercise[];
 }
 
@@ -622,6 +623,31 @@ const weekPlanSchema = {
               "Planned distance in miles for any session involving a run; null otherwise. The week's run " +
               "distances should add up toward the weekly mileage target alongside what's already been run.",
           },
+          run: {
+            type: ["object", "null"],
+            description:
+              "The run, for any session that involves one ('run' or 'lift_and_run'); null otherwise. Target paces " +
+              "are added in code from the run type, so never write paces here.",
+            properties: {
+              run_type: {
+                type: "string",
+                enum: ["Easy", "Long", "Tempo", "Marathon Pace", "Interval", "Race", "Other"],
+                description:
+                  "Which effort defines the run. Marathon-pace intervals or MP segments inside a run are 'Marathon " +
+                  "Pace'; faster repeats are 'Interval'; strides on an easy run are still 'Easy'.",
+              },
+              structure: {
+                type: ["string", "null"],
+                description:
+                  "How the miles break down, for anything beyond one steady effort — e.g. '1 mi easy · 3 × 1.5 mi " +
+                  "@ MP w/ 90s jog · 1 mi easy', '6 mi easy + 6 × 20s strides', '14 mi, last 3 @ MP'. Name efforts " +
+                  "(easy, MP, tempo, strides), not paces. Segment distances must add up to the session's miles. " +
+                  "Null for a plain easy or long run.",
+              },
+            },
+            required: ["run_type", "structure"],
+            additionalProperties: false,
+          },
           taxes_legs: {
             type: "boolean",
             description:
@@ -665,7 +691,7 @@ const weekPlanSchema = {
             },
           },
         },
-        required: ["kind", "title", "rationale", "regions", "preferred_dow", "miles", "taxes_legs", "priority", "exercises"],
+        required: ["kind", "title", "rationale", "regions", "preferred_dow", "miles", "run", "taxes_legs", "priority", "exercises"],
         additionalProperties: false,
       },
     },
@@ -721,6 +747,9 @@ async function requestWeekPlan(contextJson: string, postRace: boolean, extra: st
       "lift or quality work. A run and a lift on the same day is one 'lift_and_run' session. Use " +
       "'active_recovery' only when a day has no run, and even then make it real work (a walk plus accessory, " +
       "core and mobility).\n\n" +
+      "Every run gets its run object: the run type, and for anything beyond one steady effort a structure " +
+      "breaking the miles into segments (warm-up, reps or MP segments with recoveries, cool-down, strides). " +
+      "Title a 'lift_and_run' as '<run> + <lift>', e.g. 'MP intervals + Pull & rear delts'.\n\n" +
       "Strength principles — these are the coaching philosophy, not a template:\n" +
       STRENGTH_PRINCIPLES.map((p) => `- ${p}`).join("\n") +
       "\n\n" +

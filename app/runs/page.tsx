@@ -9,6 +9,8 @@ import { RUN_TYPES } from "@/lib/types";
 import { formatDuration, formatLoggedAt, formatPace, localDateKey, loggedAtFor } from "@/lib/format";
 import { notifyDataChanged } from "@/lib/refresh";
 import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
+import type { WeekPlan } from "@/lib/planner/types";
+import { formatPaceRange, plannedRunFor, runPrefillQuery, type PlannedRun } from "@/lib/planner/runPlan";
 import {
   describeIntervals,
   emptyIntervalSet,
@@ -108,6 +110,27 @@ const EMPTY_FORM: FormState = {
   notes: "",
 };
 
+/** A saved run back into the form, for editing. */
+function runToForm(r: Run): FormState {
+  const str = (v: number | string | null | undefined) => (v == null ? "" : String(v));
+  return {
+    distance: str(r.distance_miles),
+    duration: secondsToDigits(r.duration_seconds),
+    pace: secondsToDigits(r.pace_seconds_per_mile),
+    avgHr: str(r.avg_hr),
+    maxHr: str(r.max_hr),
+    cadence: str(r.cadence_spm),
+    elevGain: str(r.elev_gain_ft),
+    elevLoss: str(r.elev_loss_ft),
+    calories: str(r.calories),
+    temp: str(r.temp_f),
+    humidity: str(r.humidity_pct),
+    surface: r.surface ?? "",
+    shoes: r.shoes ?? "",
+    notes: r.notes ?? "",
+  };
+}
+
 export default function RunsPage() {
   const [date, setDate] = useState(todayISO());
   const [runType, setRunType] = useState<string>("");
@@ -124,10 +147,89 @@ export default function RunsPage() {
   const [savingFavorite, setSavingFavorite] = useState(false);
   const [favoriteSaved, setFavoriteSaved] = useState(false);
   const [search, setSearch] = useState("");
+  // Editing an existing run: the same form, saved over the original.
+  const [editing, setEditing] = useState<Run | null>(null);
+  // Today's planned run, offered as a one-tap prefill.
+  const [todayPlan, setTodayPlan] = useState<{ run: PlannedRun; query: string } | null>(null);
+  // Set when the form was filled from the plan: the target, kept in view above the form.
+  const [fromPlan, setFromPlan] = useState<{ target: string } | null>(null);
 
   useEffect(() => {
     loadRecent();
+    // Read off location rather than useSearchParams so the page stays
+    // statically rendered without a Suspense boundary.
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("edit");
+    if (editId) {
+      fetch(`/api/runs/${editId}`)
+        .then((res) => res.json())
+        .then((json) => json.run && startEdit(json.run));
+    } else if (params.get("plan")) {
+      applyPlanParams(params);
+    }
+    loadTodayPlan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadTodayPlan() {
+    try {
+      const json: { plan?: WeekPlan } = await fetch("/api/plan").then((res) => res.json());
+      const plan = json.plan;
+      if (!plan) return;
+      const day = plan.days?.find((d) => d.date === plan.today);
+      const session = day?.sessionId ? plan.sessions.find((s) => s.id === day.sessionId) : undefined;
+      const run = session ? plannedRunFor(session) : null;
+      if (session && run && !day?.loggedRun) setTodayPlan({ run, query: runPrefillQuery(session, null) });
+    } catch {
+      // The banner is a convenience; the form works without it.
+    }
+  }
+
+  /** Fills the form from a plan session's prefill query. Everything stays editable. */
+  function applyPlanParams(params: URLSearchParams) {
+    const type = params.get("runType");
+    if (type && (RUN_TYPES as readonly string[]).includes(type)) setRunType(type);
+    setForm((prev) => ({
+      ...prev,
+      distance: params.get("distance") ?? prev.distance,
+      pace: params.get("pace") ?? prev.pace,
+      notes: params.get("notes") ?? prev.notes,
+    }));
+    const planDate = params.get("date");
+    if (planDate && /^\d{4}-\d{2}-\d{2}$/.test(planDate)) setDate(planDate);
+    const target = (params.get("notes") ?? "").replace(/^Plan:\s*/, "");
+    const paceDigits = params.get("pace");
+    setFromPlan({
+      target: [params.get("distance") ? `${params.get("distance")} mi` : "", type ?? "", target || (paceDigits ? `@ ${digitsToClock(paceDigits)}/mi` : "")]
+        .filter(Boolean)
+        .join(" · "),
+    });
+  }
+
+  function startEdit(r: Run) {
+    setEditing(r);
+    setFromPlan(null);
+    setLastSaved(null);
+    setError(null);
+    setRunType(r.run_type ?? "");
+    setFeel(r.feel ?? "");
+    setIntervals(r.intervals ?? emptyIntervals());
+    setForm(runToForm(r));
+    setDate(localDateKey(new Date(r.logged_at)));
+    setAddingShoe(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function resetForm() {
+    setForm(EMPTY_FORM);
+    setRunType("");
+    setFeel("");
+    setIntervals(emptyIntervals());
+    setAddingShoe(false);
+    setDate(todayISO());
+    setEditing(null);
+    setFromPlan(null);
+  }
 
   async function loadRecent() {
     setLoadingRecent(true);
@@ -153,40 +255,48 @@ export default function RunsPage() {
     setError(null);
     setFavoriteSaved(false);
     try {
-      const res = await fetch("/api/runs", {
-        method: "POST",
+      const payload: Record<string, unknown> = {
+        run_type: runType || null,
+        distance_miles: form.distance || null,
+        duration_seconds: parseClock(digitsToClock(form.duration)),
+        pace_seconds_per_mile: parseClock(digitsToClock(form.pace)),
+        avg_hr: form.avgHr || null,
+        max_hr: form.maxHr || null,
+        cadence_spm: form.cadence || null,
+        elev_gain_ft: form.elevGain || null,
+        elev_loss_ft: form.elevLoss || null,
+        calories: form.calories || null,
+        temp_f: form.temp || null,
+        humidity_pct: form.humidity || null,
+        surface: form.surface || null,
+        shoes: form.shoes || null,
+        notes: form.notes || null,
+        feel: feel || null,
+        intervals: hasIntervalData(intervals) ? intervals : null,
+      };
+      // Distance, time and pace are tied together: on an edit, whichever of
+      // them the user didn't touch is recomputed from the ones they did, so
+      // correcting the distance doesn't leave the old pace behind.
+      if (editing) {
+        const before = runToForm(editing);
+        const changed = (k: keyof FormState) => form[k].trim() !== before[k].trim();
+        if ((changed("distance") || changed("duration")) && !changed("pace")) payload.pace_seconds_per_mile = null;
+        else if (changed("pace") && !changed("distance") && !changed("duration")) payload.duration_seconds = null;
+      }
+      // An edit keeps its original time unless the date itself moved.
+      if (!editing || date !== localDateKey(new Date(editing.logged_at))) payload.logged_at = loggedAtFor(date);
+
+      const res = await fetch(editing ? `/api/runs/${editing.id}` : "/api/runs", {
+        method: editing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          run_type: runType || null,
-          logged_at: loggedAtFor(date),
-          distance_miles: form.distance || null,
-          duration_seconds: parseClock(digitsToClock(form.duration)),
-          pace_seconds_per_mile: parseClock(digitsToClock(form.pace)),
-          avg_hr: form.avgHr || null,
-          max_hr: form.maxHr || null,
-          cadence_spm: form.cadence || null,
-          elev_gain_ft: form.elevGain || null,
-          elev_loss_ft: form.elevLoss || null,
-          calories: form.calories || null,
-          temp_f: form.temp || null,
-          humidity_pct: form.humidity || null,
-          surface: form.surface || null,
-          shoes: form.shoes || null,
-          notes: form.notes || null,
-          feel: feel || null,
-          intervals: hasIntervalData(intervals) ? intervals : null,
-        }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Failed to log run.");
+      if (!res.ok) throw new Error(json.error ?? (editing ? "Failed to save changes." : "Failed to log run."));
       setLastSaved(json.run);
       notifyDataChanged("run");
-      setForm(EMPTY_FORM);
-      setRunType("");
-      setFeel("");
-      setIntervals(emptyIntervals());
-      setAddingShoe(false);
-      setDate(todayISO());
+      if (!editing) setTodayPlan(null);
+      resetForm();
       loadRecent();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -292,7 +402,44 @@ export default function RunsPage() {
 
   return (
     <div>
-      <PageHeader title="Log a Run" subtitle="Fill in whatever you've got — nothing is required." />
+      <PageHeader
+        title={editing ? "Edit Run" : "Log a Run"}
+        subtitle={editing ? "Change anything, then save — the original entry is updated." : "Fill in whatever you've got — nothing is required."}
+      />
+
+      {editing ? (
+        <div className="mx-4 mb-4 flex items-center justify-between gap-2 rounded-xl border border-fuel/40 bg-fuel/10 px-3 py-2">
+          <span className="text-xs text-fuel">Editing {formatLoggedAt(editing.logged_at, editing.created_at)} run</span>
+          <button type="button" onClick={resetForm} className="min-h-[44px] px-2 text-xs font-semibold text-fuel">
+            Cancel
+          </button>
+        </div>
+      ) : todayPlan && !fromPlan ? (
+        <div className="mx-4 mb-4 flex items-center justify-between gap-2 rounded-xl border border-run/30 bg-run/5 px-3 py-2">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wide text-faint">Today&apos;s plan</p>
+            <p className="truncate text-sm text-ink">
+              {todayPlan.run.miles ? `${todayPlan.run.miles} mi ` : ""}
+              {todayPlan.run.type}
+              {todayPlan.run.pace ? ` @ ${formatPaceRange(todayPlan.run.pace)}` : ""}
+            </p>
+            {todayPlan.run.structure && <p className="truncate text-xs text-muted">{todayPlan.run.structure}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={() => applyPlanParams(new URLSearchParams(todayPlan.query))}
+            className="min-h-[44px] shrink-0 rounded-xl bg-run/20 px-3 text-sm font-semibold text-run"
+          >
+            Use plan
+          </button>
+        </div>
+      ) : fromPlan ? (
+        <div className="mx-4 mb-4 rounded-xl border border-run/30 bg-run/5 px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-faint">From today&apos;s plan</p>
+          <p className="text-sm text-ink">{fromPlan.target}</p>
+          <p className="mt-0.5 text-xs text-muted">Filled in below — change anything that went differently.</p>
+        </div>
+      ) : null}
 
       <form onSubmit={handleSubmit} className="px-4">
         <div className="mb-4 flex items-end justify-between gap-3">
@@ -356,6 +503,8 @@ export default function RunsPage() {
 
         {runType === "Interval" && (
           <IntervalEditor
+            // Its fields seed from props on mount; a new key reseeds them for a different run.
+            key={editing?.id ?? "new"}
             intervals={intervals}
             disabled={submitting}
             onModeChange={(mode) => updateIntervals({ mode })}
@@ -411,12 +560,12 @@ export default function RunsPage() {
         />
 
         <button type="submit" className="btn-primary mt-4 w-full" disabled={submitting || !hasAnyInput}>
-          {submitting ? "Getting coaching feedback…" : "Log Run"}
+          {submitting ? (editing ? "Saving…" : "Getting coaching feedback…") : editing ? "Save changes" : "Log Run"}
         </button>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </form>
 
-      {submitting && <Spinner label="Claude is reviewing your run…" />}
+      {submitting && !editing && <Spinner label="Claude is reviewing your run…" />}
 
       {lastSaved && !submitting && (
         <div className="mt-5 px-4">
@@ -511,6 +660,13 @@ export default function RunsPage() {
                     {r.shoes ? ` · ${r.shoes}` : ""}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => startEdit(r)}
+                  className="min-h-[44px] shrink-0 px-2 text-xs font-medium text-muted active:text-accent"
+                >
+                  Edit
+                </button>
               </div>
             ))}
           </div>
