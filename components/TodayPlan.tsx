@@ -76,7 +76,10 @@ export default function TodayPlan({
   const isFuture = todayKey != null && (selected?.date ?? "") > todayKey;
   const run = session ? plannedRunFor(session) : null;
   const liftRegions = session ? liftRegionsFor(session) : [];
-  const canLog = !!session && session.kind !== "rest" && selected?.status !== "done" && !isFuture;
+  // Not tied to the day reading "done": a run + mobility day is done once the
+  // run is in, but the mobility half must stay loggable. Each button shows a
+  // ✓ for its own half instead.
+  const canLog = !!session && session.kind !== "rest" && !isFuture;
 
   // Strip grouped by training week, so the Sunday boundary is visible.
   const groups = weeks
