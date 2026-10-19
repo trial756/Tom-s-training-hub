@@ -38,8 +38,19 @@ const SILHOUETTE_EDGE =
   "L94 403 C95 396 93 388 91 380 C91 360 95 340 94 318 C93 300 92 292 92 284 C93 262 95 236 96 214 " +
   "L100 208";
 const SILHOUETTE_FILL = `${SILHOUETTE_EDGE} L100.8 208 L100.8 12 Z`;
-/** The head, for its own shading. */
+/** The head — a dark hood, so attention stays on the muscle. */
 const HEAD = "M100 12 C90 12 83 20 83 34 C83 46 86 55 92 63 C95 66 98 67 100 67 Z";
+/** One eye, slanted slightly; mirrored like everything else. */
+const EYE = "M89.5 35.8 C91 34.6 94 34.4 96.4 35.2 C95 36.6 92 37.2 89.5 35.8 Z";
+/**
+ * Black training shorts, waist to mid-thigh. Drawn over the muscles but under
+ * the glow, so trained glutes and upper quads still shine through the fabric.
+ */
+const SHORTS =
+  "M100.8 199 L100 199 C88 199 75 197 64.5 195.5 C61.5 204 59.6 216 59.2 230 C59 238 59.2 245 59.6 251 " +
+  "C70 253.5 82 254 95.4 252 C96.3 241 97.2 230 98.6 221 C99.4 219.5 100 219.5 100.8 219.5 Z";
+const SHORTS_HEM = "M59.6 251 C70 253.5 82 254 95.4 252";
+const SHORTS_WAIST = "M64.5 195.5 C75 197 88 199 100 199";
 
 /**
  * Fibre texture, generated rather than hand-drawn: `n` strokes run from
@@ -374,9 +385,18 @@ function shadesFor(source: "lift" | "run", intensity: number) {
   };
 }
 
-/** Slate "sculpture" tones for anything without load. */
-const SLATE = { core: "#4a4f55", base: "#363a3f", edge: "#22252a", stroke: "#50555b", fiber: "rgba(255, 255, 255, 0.11)" };
-
+/**
+ * Natural muscle tone, lit from above-left: every muscle is always visible,
+ * as in an anatomy render. Training doesn't switch a muscle on — it makes it glow.
+ */
+const MUSCLE = {
+  core: [214, 164, 150] as RGB,
+  base: [168, 116, 102] as RGB,
+  edge: [96, 58, 49] as RGB,
+  stroke: "#4a2b24",
+  fiber: "rgba(255, 228, 216, 0.26)",
+  cut: "rgba(48, 22, 16, 0.6)",
+};
 function Figure({
   parts,
   extras,
@@ -415,52 +435,87 @@ function Figure({
       {(m.fibers?.length || m.cuts?.length) && (
         <g clipPath={`url(#${clipId})`} fill="none" strokeLinecap="round" pointerEvents="none">
           {m.fibers?.flatMap(fiberPaths).map((p, i) => (
-            <path key={`f${i}`} d={p} stroke={fiberColor} strokeWidth={0.4} />
+            <path key={`f${i}`} d={p} stroke={fiberColor} strokeWidth={0.35} />
           ))}
           {m.cuts?.map((p, i) => (
-            <path key={`c${i}`} d={p} stroke="rgba(0, 0, 0, 0.55)" strokeWidth={1} />
+            <path key={`c${i}`} d={p} stroke={MUSCLE.cut} strokeWidth={0.9} />
           ))}
         </g>
       )}
     </>
   );
 
+  /** Muscle-tone gradient, pulled toward the glow colour as load rises. */
+  const toneStops = (tint: RGB | null, t: number) => {
+    const k = tint ? 0.38 * t : 0;
+    const lift = (c: RGB) => (tint ? mix(c, tint, k) : c);
+    return (
+      <>
+        <stop offset="0" stopColor={css(lift(MUSCLE.core))} />
+        <stop offset="0.55" stopColor={css(lift(MUSCLE.base))} />
+        <stop offset="1" stopColor={css(lift(MUSCLE.edge))} />
+      </>
+    );
+  };
+
   return (
     <div className="flex-1">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`${label} muscle map`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible" role="img" aria-label={`${label} muscle map`}>
         <defs>
+          {/* The body beneath the muscles reads as deep shadow between them. */}
           <linearGradient id={id("body")} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="#1c1e21" />
-            <stop offset="0.5" stopColor="#2c2f33" />
-            <stop offset="1" stopColor="#1c1e21" />
+            <stop offset="0" stopColor="#6a4136" />
+            <stop offset="0.5" stopColor="#94604f" />
+            <stop offset="1" stopColor="#6a4136" />
           </linearGradient>
-          <clipPath id={id("silhouette")}>
-            <path d={SILHOUETTE_FILL} />
-            <path d={SILHOUETTE_FILL} transform={MIRROR} />
-          </clipPath>
-          <filter id={id("haze")} x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="9" />
+          <radialGradient id={id("head")} cx="0.55" cy="0.3" r="0.8">
+            <stop offset="0" stopColor="#2a2a2c" />
+            <stop offset="1" stopColor="#0c0c0d" />
+          </radialGradient>
+          <linearGradient id={id("shorts")} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#1a1a1b" />
+            <stop offset="1" stopColor="#0b0b0c" />
+          </linearGradient>
+          <radialGradient id={id("tone")} cx="0.4" cy="0.3" r="0.8">
+            {toneStops(null, 0)}
+          </radialGradient>
+          {/* Halo: wide and soft, spilling past the outline onto the background. */}
+          <filter id={id("halo")} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="6" />
           </filter>
-          <radialGradient id={id("head")} cx="0.55" cy="0.35" r="0.75">
-            <stop offset="0" stopColor="#40444a" />
-            <stop offset="1" stopColor="#202327" />
-          </radialGradient>
-          {/* Lit from above-left, like the sculpted reference. */}
-          <radialGradient id={id("slate")} cx="0.4" cy="0.3" r="0.8">
-            <stop offset="0" stopColor={SLATE.core} />
-            <stop offset="0.55" stopColor={SLATE.base} />
-            <stop offset="1" stopColor={SLATE.edge} />
-          </radialGradient>
+          {/* Rim and energy lines: crisp line with a tight bloom. */}
+          <filter id={id("bloom")} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="0.9" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          {/* Glow outside the shorts at full strength, through them faintly. */}
+          <mask id={id("bare")} maskUnits="userSpaceOnUse" x="-20" y="-20" width={W + 40} height={H + 40}>
+            <rect x="-20" y="-20" width={W + 40} height={H + 40} fill="white" />
+            <path d={SHORTS} fill="black" />
+            <path d={SHORTS} transform={MIRROR} fill="black" />
+          </mask>
+          <mask id={id("covered")} maskUnits="userSpaceOnUse" x="-20" y="-20" width={W + 40} height={H + 40}>
+            <path d={SHORTS} fill="white" />
+            <path d={SHORTS} transform={MIRROR} fill="white" />
+          </mask>
+          <filter id={id("eyes")} x="-200%" y="-200%" width="500%" height="500%">
+            <feGaussianBlur stdDeviation="1.1" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
           {parts.map(({ region, muscles }) => {
             const d = data.get(region);
-            const s = d && d.intensity > 0 ? shadesFor(d.source, d.intensity) : null;
+            const trained = !!d && d.intensity > 0;
             return (
               <g key={region}>
-                {s && (
-                  <radialGradient id={id(`fill-${region}`)} cx="0.4" cy="0.32" r="0.8">
-                    <stop offset="0" stopColor={css(s.core)} />
-                    <stop offset="0.55" stopColor={css(s.base)} />
-                    <stop offset="1" stopColor={css(s.edge)} />
+                {trained && (
+                  <radialGradient id={id(`fill-${region}`)} cx="0.4" cy="0.3" r="0.8">
+                    {toneStops(shadesFor(d!.source, d!.intensity).base, clamp01(d!.intensity))}
                   </radialGradient>
                 )}
                 {muscles.map((m, i) => (
@@ -484,56 +539,52 @@ function Figure({
           <path d={SILHOUETTE_FILL} transform={MIRROR} />
         </g>
 
-        {/* The head, shaded on its own so it reads as a form, not a hole. */}
-        <g fill={`url(#${id("head")})`} pointerEvents="none">
-          <path d={HEAD} />
-          <path d={HEAD} transform={MIRROR} />
+        {/* Hood and eyes. */}
+        <g pointerEvents="none">
+          <g fill={`url(#${id("head")})`}>
+            <path d={HEAD} />
+            <path d={HEAD} transform={MIRROR} />
+          </g>
+          <g fill="#f4f8ff" filter={`url(#${id("eyes")})`}>
+            <path d={EYE} />
+            <path d={EYE} transform={MIRROR} />
+          </g>
         </g>
 
-        {/* Supporting anatomy: always slate, never tappable. */}
-        <g pointerEvents="none" opacity={selected ? 0.5 : 1} style={{ transition: "opacity 200ms" }}>
-          {halves.map((transform, h) => (
-            <g key={h} transform={transform}>
-              {extras.map((m, i) => (
-                <g key={i}>{renderMuscle(m, id(`clip-extra-${i}`), `url(#${id("slate")})`, SLATE.stroke, 0.4, SLATE.fiber)}</g>
-              ))}
-            </g>
-          ))}
-        </g>
-
-        {/* Heat haze: trained muscles blurred wide and kept inside the body,
-            so colour bleeds across neighbours and gym/run blend where they meet. */}
-        <g clipPath={`url(#${id("silhouette")})`} pointerEvents="none">
-          <g filter={`url(#${id("haze")})`}>
+        {/* Halo behind the muscles: it spills out past the body and into the
+            gaps between muscles, leaving the muscle itself textured. */}
+        <g pointerEvents="none">
+          <g filter={`url(#${id("halo")})`}>
             {trainedParts.map(({ region, muscles }) => {
               const d = data.get(region)!;
               const s = shadesFor(d.source, d.intensity);
               const dimmed = selected != null && selected !== region;
               return (
-                <g key={region} opacity={(0.2 + 0.7 * clamp01(d.intensity)) * (dimmed ? 0.4 : 1)}>
-                  {halves.map((transform, h) =>
-                    muscles.map((m, i) => <path key={`${h}-${i}`} d={m.d} fill={css(s.base)} transform={transform} />)
-                  )}
+                <g key={region} fill={css(s.base)} opacity={(0.4 + 0.6 * clamp01(d.intensity)) * (dimmed ? 0.35 : 1)}>
+                  {halves.map((transform, h) => muscles.map((m, i) => <path key={`${h}-${i}`} d={m.d} transform={transform} />))}
                 </g>
               );
             })}
           </g>
         </g>
 
-        <g fill="none" stroke="#3a3e43" strokeWidth="0.8" strokeLinejoin="round" pointerEvents="none">
-          <path d={SILHOUETTE_EDGE} />
-          <path d={SILHOUETTE_EDGE} transform={MIRROR} />
+        {/* Supporting anatomy: muscle-toned, never tappable. */}
+        <g pointerEvents="none" opacity={selected ? 0.55 : 1} style={{ transition: "opacity 200ms" }}>
+          {halves.map((transform, h) => (
+            <g key={h} transform={transform}>
+              {extras.map((m, i) => (
+                <g key={i}>{renderMuscle(m, id(`clip-extra-${i}`), `url(#${id("tone")})`, MUSCLE.stroke, 0.4, MUSCLE.fiber)}</g>
+              ))}
+            </g>
+          ))}
         </g>
 
         {parts.map(({ region, muscles }) => {
           const d = data.get(region);
           const trained = !!d && d.intensity > 0;
-          const s = trained ? shadesFor(d!.source, d!.intensity) : null;
           const isSelected = selected === region;
           const dimmed = selected != null && !isSelected;
-          const fill = trained ? `url(#${id(`fill-${region}`)})` : `url(#${id("slate")})`;
-          const stroke = isSelected ? "#f5f5f5" : trained ? css(s!.line, 0.55) : SLATE.stroke;
-          const fiber = trained ? css(s!.line, 0.45) : SLATE.fiber;
+          const fill = trained ? `url(#${id(`fill-${region}`)})` : `url(#${id("tone")})`;
 
           return (
             <g
@@ -541,7 +592,7 @@ function Figure({
               role="button"
               aria-label={d?.label ?? region}
               onClick={() => onPick(region)}
-              style={{ cursor: "pointer", opacity: dimmed ? 0.4 : 1, transition: "opacity 200ms" }}
+              style={{ cursor: "pointer", opacity: dimmed ? 0.45 : 1, transition: "opacity 200ms" }}
             >
               {halves.map((transform, h) => (
                 <g key={h} transform={transform}>
@@ -551,7 +602,7 @@ function Figure({
                     <path key={`hit${i}`} d={m.d} fill="none" stroke="transparent" strokeWidth="7" pointerEvents="stroke" />
                   ))}
                   {muscles.map((m, i) => (
-                    <g key={i}>{renderMuscle(m, id(`clip-${region}-${i}`), fill, stroke, isSelected ? 1.6 : 0.5, fiber)}</g>
+                    <g key={i}>{renderMuscle(m, id(`clip-${region}-${i}`), fill, MUSCLE.stroke, 0.5, MUSCLE.fiber)}</g>
                   ))}
                 </g>
               ))}
@@ -559,13 +610,104 @@ function Figure({
           );
         })}
 
-        <g stroke="#45494e" strokeWidth="0.7" fill="none" strokeLinecap="round" pointerEvents="none">
+        <g stroke="rgba(48, 22, 16, 0.7)" strokeWidth="0.7" fill="none" strokeLinecap="round" pointerEvents="none">
           {details.map((p, i) => (
             <g key={i}>
               <path d={p} />
               <path d={p} transform={MIRROR} />
             </g>
           ))}
+        </g>
+
+        {/* Shorts sit over the hips but under the glow. */}
+        <g pointerEvents="none">
+          <g fill={`url(#${id("shorts")})`}>
+            <path d={SHORTS} />
+            <path d={SHORTS} transform={MIRROR} />
+          </g>
+          <g fill="none" stroke="#2c2c2e" strokeWidth="0.8" strokeLinecap="round">
+            {[SHORTS_WAIST, SHORTS_HEM].map((p, i) => (
+              <g key={i}>
+                <path d={p} />
+                <path d={p} transform={MIRROR} />
+              </g>
+            ))}
+          </g>
+        </g>
+
+        {/* The glow's top layers: a bright rim and energy lines along the
+            fibres (the halo sits behind the muscles, above). Brightness follows
+            load, so a stale muscle fades back to plain tissue. */}
+        <g pointerEvents="none">
+          <g mask={`url(#${id("bare")})`}>
+          <g filter={`url(#${id("bloom")})`} fill="none" strokeLinecap="round" strokeLinejoin="round">
+            {trainedParts.map(({ region, muscles }) => {
+              const d = data.get(region)!;
+              const t = clamp01(d.intensity);
+              const s = shadesFor(d.source, d.intensity);
+              const dimmed = selected != null && selected !== region;
+              return (
+                <g key={region} opacity={(0.35 + 0.65 * t) * (dimmed ? 0.35 : 1)}>
+                  {halves.map((transform, h) => (
+                    <g key={h} transform={transform}>
+                      {muscles.map((m, i) => (
+                        <g key={i}>
+                          <path d={m.d} stroke={css(s.line)} strokeWidth={0.6 + 0.5 * t} />
+                          {/* Every third fibre lights up — enough to read as current, not hatching. */}
+                          <g clipPath={`url(#${id(`clip-${region}-${i}`)})`}>
+                            {m.fibers
+                              ?.flatMap(fiberPaths)
+                              .filter((_, k) => k % 3 === 1)
+                              .map((p, k) => <path key={k} d={p} stroke={css(s.core)} strokeWidth={0.45} />)}
+                          </g>
+                        </g>
+                      ))}
+                    </g>
+                  ))}
+                </g>
+              );
+            })}
+          </g>
+          </g>
+          <g mask={`url(#${id("covered")})`} opacity={0.35}>
+          <g filter={`url(#${id("bloom")})`} fill="none" strokeLinecap="round" strokeLinejoin="round">
+            {trainedParts.map(({ region, muscles }) => {
+              const d = data.get(region)!;
+              const t = clamp01(d.intensity);
+              const s = shadesFor(d.source, d.intensity);
+              const dimmed = selected != null && selected !== region;
+              return (
+                <g key={region} opacity={(0.35 + 0.65 * t) * (dimmed ? 0.35 : 1)}>
+                  {halves.map((transform, h) => (
+                    <g key={h} transform={transform}>
+                      {muscles.map((m, i) => (
+                        <g key={i}>
+                          <path d={m.d} stroke={css(s.line)} strokeWidth={0.6 + 0.5 * t} />
+                          {/* Every third fibre lights up — enough to read as current, not hatching. */}
+                          <g clipPath={`url(#${id(`clip-${region}-${i}`)})`}>
+                            {m.fibers
+                              ?.flatMap(fiberPaths)
+                              .filter((_, k) => k % 3 === 1)
+                              .map((p, k) => <path key={k} d={p} stroke={css(s.core)} strokeWidth={0.45} />)}
+                          </g>
+                        </g>
+                      ))}
+                    </g>
+                  ))}
+                </g>
+              );
+            })}
+          </g>
+          </g>
+          {/* Selection outline, above the shorts so a selected glute still shows. */}
+          {selected &&
+            parts
+              .filter((p) => p.region === selected)
+              .map(({ region, muscles }) => (
+                <g key={region} fill="none" stroke="#f5f5f5" strokeWidth="1.3" strokeLinejoin="round">
+                  {halves.map((transform, h) => muscles.map((m, i) => <path key={`${h}-${i}`} d={m.d} transform={transform} />))}
+                </g>
+              ))}
         </g>
       </svg>
       <p className="text-center text-[10px] uppercase tracking-wide text-faint">{label}</p>
@@ -634,7 +776,7 @@ function BodyMap({
           </span>
         ))}
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-sm border border-[#50555b] bg-[#363a3f]" /> untrained
+          <span className="h-2 w-2 rounded-sm border border-[#4a2b24] bg-[#a87466]" /> not trained
         </span>
       </div>
 
