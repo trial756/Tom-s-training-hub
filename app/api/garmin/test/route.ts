@@ -29,7 +29,8 @@ const pick = (o: Record<string, unknown>, keys: string[]) => {
 
 /**
  * Connection check for the Garmin Personal API. Reports whether the key works
- * and what an activity looks like. Never returns the key or the token.
+ * and the shape of an activity (field names, no values). Never returns the
+ * key, the token or any activity data.
  */
 export async function GET() {
   const steps: Record<string, unknown> = {};
@@ -52,11 +53,8 @@ export async function GET() {
       responseType: Array.isArray(list) ? "array" : typeof list,
       responseKeys: Array.isArray(list) ? null : Object.keys((list as object) ?? {}),
       count: items.length,
-      recent: items.slice(0, 5).map((a) => ({
-        date: pick(a, ["startTimeLocal", "startTimeGMT", "startTime", "beginTimestamp"]),
-        type: pick(a, ["activityType", "activityTypeDTO", "type"]),
-        distance: pick(a, ["distance", "distanceInMeters", "totalDistance"]),
-      })),
+      // Field names and types only — no values — so the page reveals nothing
+      // about the athlete even though it is reachable without a login.
       fields: items[0] ? shape(items[0]) : null,
     };
 
