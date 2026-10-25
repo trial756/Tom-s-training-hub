@@ -2,7 +2,7 @@
 
 This app is being migrated from a Claude.ai artifact (React + local key-value storage) to a real hosted app: **React + Tailwind + Supabase (Postgres) + Vercel**. This document captures everything the artifact version already does, so the rebuild matches it feature-for-feature before extending further.
 
-**Supabase project ID:** `yqprtirfgtdxdmkktoya` — tables already created: `workouts`, `runs`, `meals`, `favorites` (RLS on, zero public policies — app talks to Supabase via service-role key server-side only).
+**Supabase project ID:** `yqprtirfgtdxdmkktoya` — tables already created: `workouts`, `runs`, `meals`, `favorites` (plus `exercise_muscles`, `week_plans`, `sync_state`) (RLS on, zero public policies — app talks to Supabase via service-role key server-side only).
 
 ---
 
@@ -77,6 +77,7 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 - "Today's plan" banner with **Use plan** when today has an unlogged planned run
 - **Edit**: each recent run (and "Edit run" in History) reopens this form filled in and saves over the original (`PATCH /api/runs/[id]`, no AI call). Of distance / time / pace, whichever wasn't touched is recomputed from the ones that were
 - Search bar; pace vs. 8:01 goal color-coded (green=ahead, amber=close, red=slow)
+- **Garmin import** (`lib/garminSync.ts`, Garmin Connect Personal API, key in `GARMIN_PERSONAL_API_KEY`): runs from the watch arrive on their own — synced whenever the app opens or returns to the foreground (server-throttled to every 10 min) plus a daily Vercel cron. One-time backfill from Jun 14 2026 (block start), in chunks. Each Garmin activity is imported once (`runs.garmin_activity_id`, unique) and never rewritten, so app edits stick. A Garmin run on a day with a hand-logged run: within 10% on distance and time → Garmin's numbers, keeping feel/notes/shoes/run type; further apart → the logged numbers stay (blanks filled), entry linked; distances >50% apart → a separate run (double day). New imports take run type from that day's plan (else pace), the last-used shoes, and a "Garmin · fastest mile · TE · load" note; only runs from the last 3 days get AI coaching. Extras (training effect, load, HR zones, fastest splits, Body Battery change) live in `runs.garmin_data`. Imported runs show a GARMIN tag; Edit works as for any run.
 
 ### Fuel (meal entry)
 - **Favorites row** at top — meals become favorites two ways: (1) manually starred after logging, (2) automatically once logged 3+ times. Sorted starred-first then by frequency. Tapping a favorite **prefills** the text box (does not auto-submit).

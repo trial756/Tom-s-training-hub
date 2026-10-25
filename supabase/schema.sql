@@ -169,3 +169,19 @@ alter table meals enable row level security;
 alter table favorites enable row level security;
 alter table exercise_muscles enable row level security;
 alter table week_plans enable row level security;
+
+-- ── Garmin sync (Oct 2026) ──────────────────────────────────────────
+-- Runs imported from the Garmin Personal API carry the activity id (unique,
+-- so each is imported once) and the Garmin-only extras (training effect,
+-- load, HR zones, fastest splits, Body Battery change).
+alter table runs add column if not exists garmin_activity_id bigint;
+alter table runs add column if not exists garmin_data jsonb;
+create unique index if not exists runs_garmin_activity_id_key on runs (garmin_activity_id) where garmin_activity_id is not null;
+
+-- Small key/value store for background jobs (Garmin: last sync, backfill cursor).
+create table if not exists sync_state (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table sync_state enable row level security;

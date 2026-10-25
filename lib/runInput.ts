@@ -1,5 +1,6 @@
 import type { StructuredRunInput } from "@/lib/anthropic";
-import { formatDuration, formatPace } from "@/lib/format";
+import { APP_TIMEZONE, formatDuration, formatPace } from "@/lib/format";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sanitizeIntervals } from "@/lib/intervals";
 import { RUN_TYPES } from "@/lib/types";
 
@@ -76,4 +77,27 @@ export function composeRunSummary(input: StructuredRunInput): string {
   let summary = bits.join(" ");
   if (input.notes) summary += ` — ${input.notes}`;
   return summary;
+}
+
+/** The last 15 runs as one line each, for the coaching prompt. */
+export async function buildRunHistoryContext(): Promise<string> {
+  const { data } = await supabaseAdmin()
+    .from("runs")
+    .select("logged_at, run_type, distance_miles, duration_seconds, pace_seconds_per_mile, avg_hr, elev_gain_ft, feel")
+    .order("logged_at", { ascending: false })
+    .limit(15);
+
+  return (data ?? [])
+    .map((r) => {
+      const date = new Date(r.logged_at).toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, month: "short", day: "numeric", year: "numeric" });
+      const bits = [`${r.run_type ?? "Run"}`];
+      if (r.distance_miles != null) bits.push(`${r.distance_miles}mi`);
+      if (r.duration_seconds != null) bits.push(`in ${formatDuration(r.duration_seconds)}`);
+      if (r.pace_seconds_per_mile != null) bits.push(`(${formatPace(r.pace_seconds_per_mile)})`);
+      if (r.avg_hr != null) bits.push(`avg HR ${r.avg_hr}`);
+      if (r.elev_gain_ft != null) bits.push(`+${r.elev_gain_ft}ft`);
+      if (r.feel) bits.push(`felt ${r.feel}`);
+      return `${date} — ${bits.join(" ")}`;
+    })
+    .join("\n");
 }

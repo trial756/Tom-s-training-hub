@@ -5,7 +5,8 @@
 // there is no refresh token, so a new one is minted when it lapses.
 // Endpoints per Garmin's public client and community probes (Oct 2026).
 
-export const GARMIN_HOST = "https://personal.connectapi.garmin.com";
+// GARMIN_API_BASE exists only to point tests at a stand-in server.
+export const GARMIN_HOST = process.env.GARMIN_API_BASE || "https://personal.connectapi.garmin.com";
 const TOKEN_PATH = "/personalapitoken-service/personal-api/personal-api-key/token";
 
 export interface GarminToken {

@@ -314,6 +314,9 @@ function HistoryCard({
           <div className="flex flex-wrap items-center gap-2">
             <span className={`pill ${kindColor} capitalize`}>{kind === "workout" ? item.type || kind : kind}</span>
             <span className="text-xs text-gray-500">{formatLoggedAt(item.logged_at, item.created_at)}</span>
+            {kind === "run" && item.garmin_activity_id && (
+              <span className="text-[10px] font-medium uppercase tracking-wide text-faint">Garmin</span>
+            )}
           </div>
 
           {kind === "workout" && (
