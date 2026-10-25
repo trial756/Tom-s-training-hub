@@ -652,6 +652,7 @@ export default function RunsPage() {
                       {r.run_type ?? "run"}
                     </span>
                     <span className="text-xs text-gray-500">{formatLoggedAt(r.logged_at, r.created_at)}</span>
+                    {r.garmin_activity_id && <span className="text-[10px] font-medium uppercase tracking-wide text-faint">Garmin</span>}
                   </div>
                   <p className="mt-1 text-sm text-gray-300">
                     {r.distance_miles ?? "?"} mi ·{" "}

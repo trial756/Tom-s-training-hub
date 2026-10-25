@@ -90,6 +90,9 @@ export interface Run {
   summary: string | null;
   weekly_note: string | null;
   intervals: RunIntervals | null;
+  /** Set when the run came from (or was matched to) a Garmin activity. */
+  garmin_activity_id?: number | null;
+  garmin_data?: Record<string, unknown> | null;
 }
 
 export interface MealItem {

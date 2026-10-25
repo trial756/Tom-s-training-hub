@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateRunCoaching } from "@/lib/anthropic";
-import { APP_TIMEZONE, formatDuration, formatPace } from "@/lib/format";
-import { composeRunSummary, normalizeRunBody } from "@/lib/runInput";
+import { buildRunHistoryContext, composeRunSummary, normalizeRunBody } from "@/lib/runInput";
 
 export const runtime = "nodejs";
 
@@ -18,28 +17,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ runs: data });
-}
-
-async function buildRunHistoryContext(): Promise<string> {
-  const { data } = await supabaseAdmin()
-    .from("runs")
-    .select("logged_at, run_type, distance_miles, duration_seconds, pace_seconds_per_mile, avg_hr, elev_gain_ft, feel")
-    .order("logged_at", { ascending: false })
-    .limit(15);
-
-  return (data ?? [])
-    .map((r) => {
-      const date = new Date(r.logged_at).toLocaleDateString("en-US", { timeZone: APP_TIMEZONE, month: "short", day: "numeric", year: "numeric" });
-      const bits = [`${r.run_type ?? "Run"}`];
-      if (r.distance_miles != null) bits.push(`${r.distance_miles}mi`);
-      if (r.duration_seconds != null) bits.push(`in ${formatDuration(r.duration_seconds)}`);
-      if (r.pace_seconds_per_mile != null) bits.push(`(${formatPace(r.pace_seconds_per_mile)})`);
-      if (r.avg_hr != null) bits.push(`avg HR ${r.avg_hr}`);
-      if (r.elev_gain_ft != null) bits.push(`+${r.elev_gain_ft}ft`);
-      if (r.feel) bits.push(`felt ${r.feel}`);
-      return `${date} — ${bits.join(" ")}`;
-    })
-    .join("\n");
 }
 
 export async function POST(req: NextRequest) {
