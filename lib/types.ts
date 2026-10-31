@@ -31,6 +31,14 @@ export interface Workout {
 export const RUN_TYPES = ["Easy", "Long", "Tempo", "Marathon Pace", "Interval", "Race", "Other"] as const;
 export type RunType = (typeof RUN_TYPES)[number];
 
+export const FEEL_CHIPS = [
+  { emoji: "🔥", label: "Great" },
+  { emoji: "😊", label: "Good" },
+  { emoji: "😐", label: "Okay" },
+  { emoji: "😓", label: "Tough" },
+  { emoji: "💀", label: "Rough" },
+];
+
 // ── Interval sessions ──────────────────────────────────────────────────
 // Two ways to log the different paces run in one interval session:
 // "quick" captures one pace per effort type; "detailed" captures each
@@ -93,6 +101,8 @@ export interface Run {
   /** Set when the run came from (or was matched to) a Garmin activity. */
   garmin_activity_id?: number | null;
   garmin_data?: Record<string, unknown> | null;
+  /** 'pending' while a Garmin run awaits confirmation. */
+  review_status?: string | null;
 }
 
 export interface MealItem {

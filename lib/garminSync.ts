@@ -1,10 +1,11 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { generateRunCoaching, type StructuredRunInput } from "@/lib/anthropic";
+import type { StructuredRunInput } from "@/lib/anthropic";
 import { localDateKey, shiftDays } from "@/lib/format";
 import { searchActivities } from "@/lib/garmin";
 import { plannedRunFor } from "@/lib/planner/runPlan";
 import type { PlanSession } from "@/lib/planner/types";
-import { buildRunHistoryContext, composeRunSummary } from "@/lib/runInput";
+import { composeRunSummary } from "@/lib/runInput";
+import { confirmRun, ignoredGarminIds } from "@/lib/runReview";
 import type { RunType } from "@/lib/types";
 
 // ── Garmin → runs ────────────────────────────────────────────────────
@@ -20,14 +21,20 @@ import type { RunType } from "@/lib/types";
 //     the entry is linked so the Garmin run isn't imported again
 //   • distances more than 50% apart — a different run (a double day), so it
 //     is imported on its own
+//
+// A new run from the last two days arrives awaiting confirmation; coaching
+// waits until it's confirmed (lib/runReview.ts).
 
 /** Start of the 27-week block — how far back the one-time backfill reaches. */
 export const BACKFILL_FROM = "2026-06-14";
 const RECENT_DAYS = 7;
 const THROTTLE_MS = 10 * 60 * 1000;
 const BACKFILL_CHUNK = 20;
-/** Runs this recent get AI coaching on import; older backfilled ones don't. */
-const COACH_WITHIN_DAYS = 3;
+/**
+ * Runs this recent arrive awaiting confirmation (a pop-up in the app) and get
+ * coaching once confirmed. Older ones — the backfill — are saved as they are.
+ */
+const PENDING_WITHIN_DAYS = 2;
 const SLIGHT = 0.1;
 const DIFFERENT_RUN = 0.5;
 
@@ -237,7 +244,7 @@ async function writeState(state: SyncState) {
 }
 
 /** Imports one batch of Garmin activities. Returns counts. */
-async function importActivities(activities: GarminActivity[], opts: { coach: boolean }) {
+async function importActivities(activities: GarminActivity[], opts: { fresh: boolean }) {
   const db = supabaseAdmin();
   const counts = { imported: 0, merged: 0, linked: 0 };
   const mapped = activities.filter(isRun).map(mapActivity).filter((m): m is Mapped => !!m);
@@ -248,11 +255,13 @@ async function importActivities(activities: GarminActivity[], opts: { coach: boo
     .select("garmin_activity_id")
     .in("garmin_activity_id", mapped.map((m) => m.activityId));
   const known = new Set((existing ?? []).map((r) => Number(r.garmin_activity_id)));
+  // Garmin runs deleted in the app stay deleted.
+  for (const id of await ignoredGarminIds()) known.add(id);
   const fresh = mapped.filter((m) => !known.has(m.activityId)).sort((a, b) => a.loggedAt.localeCompare(b.loggedAt));
   if (!fresh.length) return counts;
 
   const types = await plannedTypes(Array.from(new Set(fresh.map((m) => m.dateKey))));
-  const coachCutoff = shiftDays(new Date(), -COACH_WITHIN_DAYS).toISOString();
+  const pendingCutoff = shiftDays(new Date(), -PENDING_WITHIN_DAYS).toISOString();
 
   for (const g of fresh) {
     // Hand-logged, not-yet-linked runs on the same local day.
@@ -314,31 +323,34 @@ async function importActivities(activities: GarminActivity[], opts: { coach: boo
       intervals: null,
     };
 
-    let coaching: Partial<Awaited<ReturnType<typeof generateRunCoaching>>> = {};
-    if (opts.coach && g.loggedAt >= coachCutoff) {
-      try {
-        coaching = await generateRunCoaching(structured, await buildRunHistoryContext());
-      } catch {
-        coaching = {};
+    const pending = opts.fresh && g.loggedAt >= pendingCutoff;
+    if (pending) {
+      // A new run is in, so one still waiting is saved as it stands — with
+      // coaching for its prefilled type — rather than piling up.
+      const { data: waiting } = await db.from("runs").select("id").eq("review_status", "pending");
+      for (const w of waiting ?? []) {
+        try {
+          await confirmRun(w.id as string);
+        } catch {
+          // Leave it pending; the next sync tries again.
+        }
       }
     }
     const summary = composeRunSummary(structured);
     const { error } = await db.from("runs").insert({
       ...g.fields,
-      calories: g.fields.calories ?? coaching.calories ?? null,
       run_type: runType,
       surface: g.surface,
-      notes: g.noteLine,
+      // A run awaiting review leaves notes for the athlete (the extras show on
+      // the review card); a backfilled one keeps the Garmin summary line.
+      notes: pending ? null : g.noteLine,
       shoes: lastShoes?.shoes ?? null,
       raw_text: summary,
-      summary: coaching.summary ?? summary,
-      coaching_feedback: coaching.coaching_feedback ?? null,
-      vs_last_time: coaching.vs_last_time ?? null,
-      adjustments: coaching.adjustments ?? [],
-      pace_note: coaching.pace_note ?? null,
-      weekly_note: coaching.weekly_note ?? null,
+      summary,
+      adjustments: [],
       garmin_activity_id: g.activityId,
       garmin_data: g.extras,
+      review_status: pending ? "pending" : null,
       logged_at: g.loggedAt,
       // The real start time, so it shows as "Sat, Oct 24, 7:05 AM".
       created_at: g.loggedAt,
@@ -376,14 +388,14 @@ export async function syncGarmin(opts: { force?: boolean } = {}): Promise<SyncRe
       startDate: localDateKey(shiftDays(new Date(), -RECENT_DAYS)),
       endDate: today,
     })) as GarminActivity[];
-    add(await importActivities(Array.isArray(recent) ? recent : [], { coach: true }));
+    add(await importActivities(Array.isArray(recent) ? recent : [], { fresh: true }));
     state.lastRecentSync = new Date().toISOString();
   }
 
   if (!backfill.done) {
     const page = (await searchActivities({ start: backfill.start, limit: BACKFILL_CHUNK, startDate: BACKFILL_FROM, endDate: today })) as GarminActivity[];
     const items = Array.isArray(page) ? page : [];
-    add(await importActivities(items, { coach: false }));
+    add(await importActivities(items, { fresh: false }));
     backfill.start += items.length;
     backfill.done = items.length < BACKFILL_CHUNK;
   }

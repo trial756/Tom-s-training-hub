@@ -185,3 +185,7 @@ create table if not exists sync_state (
   updated_at timestamptz not null default now()
 );
 alter table sync_state enable row level security;
+
+-- Garmin runs awaiting confirmation in the app ('pending'); null once confirmed.
+alter table runs add column if not exists review_status text;
+create index if not exists runs_review_pending_idx on runs (logged_at) where review_status = 'pending';

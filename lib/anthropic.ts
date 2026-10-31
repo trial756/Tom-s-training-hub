@@ -364,7 +364,15 @@ function describeRun(run: StructuredRunInput): string {
   return parts.join("\n");
 }
 
-export async function generateRunCoaching(run: StructuredRunInput, historyContext: string): Promise<RunCoachingResult> {
+/**
+ * `planNote` describes what the plan had for that day. When the athlete logged
+ * a different run type, the coaching follows what they chose.
+ */
+export async function generateRunCoaching(
+  run: StructuredRunInput,
+  historyContext: string,
+  planNote?: string | null
+): Promise<RunCoachingResult> {
   const result = await parseWithTool<{
     coaching_feedback: string;
     estimated_calories: number | null;
@@ -385,9 +393,15 @@ export async function generateRunCoaching(run: StructuredRunInput, historyContex
       "If an interval breakdown is present, coach the session on its own terms: comment on rep pace consistency " +
       "across the sets, whether the recovery was proportionate to the work, and how the work pace sits relative " +
       "to the athlete's threshold and goal marathon pace. Not every field is filled in on every run — work with " +
-      "what's provided and never ask for or complain about missing data.\n\n" + todayContext(),
+      "what's provided and never ask for or complain about missing data.\n\n" +
+      "You may be told what the training plan had for that day. The run type the athlete logged is what they " +
+      "actually did: coach that run on its own terms — an easy run judged as an easy run, not as a failed tempo. " +
+      "If it differs from the plan, say so in one plain sentence (no scolding) and what it means for the rest of " +
+      "the week — a skipped key session moves to a later day. If it matches the plan, judge it against the " +
+      "plan's target.\n\n" + todayContext(),
     userText:
       `Today's run:\n${describeRun(run)}\n\n` +
+      (planNote ? `Training plan for this day: ${planNote}\n\n` : "") +
       `Recent run history for comparison (most recent first):\n${historyContext || "No prior runs logged yet."}`,
     toolName: "record_run_coaching",
     toolDescription: "Records 3-part coaching feedback (and an optional calorie estimate) for an already-structured run.",

@@ -1,5 +1,6 @@
 import { daysBetweenKeys } from "@/lib/format";
 import type { MuscleRegion } from "@/lib/muscles";
+import { plannedRunFor } from "@/lib/planner/runPlan";
 import type { PlanDay, PlanDayStatus, PlanSession } from "@/lib/planner/types";
 
 export interface DayLog {
@@ -8,6 +9,30 @@ export interface DayLog {
   summary: string;
   /** Regions the logged workout actually hit, resolved via the lookup. */
   regions: MuscleRegion[];
+  /** Each run logged that day — its type and distance. */
+  runs?: { type: string | null; miles: number | null }[];
+}
+
+const KEY_RUN_TYPES = new Set(["Long", "Tempo", "Marathon Pace", "Interval", "Race"]);
+
+/**
+ * A planned key run (long, tempo, MP, intervals) only counts when a run of
+ * that type was logged — a long run logged as Easy leaves the long run owed,
+ * so the day goes off-script and the long run moves to a later day. A long
+ * run also counts if the distance was there (80% of plan) whatever its label.
+ * Easy runs are satisfied by any run.
+ */
+function runMatched(session: PlanSession, log: DayLog): boolean {
+  if (!log.hasRun) return false;
+  const planned = plannedRunFor(session);
+  if (!planned || !KEY_RUN_TYPES.has(planned.type)) return true;
+  const runs = log.runs ?? [];
+  if (runs.length === 0) return true; // no detail — give it the benefit
+  return runs.some(
+    (r) =>
+      r.type === planned.type ||
+      (planned.type === "Long" && planned.miles != null && r.miles != null && r.miles >= planned.miles * 0.8)
+  );
 }
 
 /** A session that leaves the legs cooked shouldn't sit next to a key run. */
@@ -33,7 +58,7 @@ function satisfiedBy(session: PlanSession, log: DayLog): boolean {
     case "lift":
       return liftMatched(session, log);
     case "run":
-      return log.hasRun;
+      return runMatched(session, log);
     case "lift_and_run":
       return liftMatched(session, log) && log.hasRun;
     case "active_recovery":
