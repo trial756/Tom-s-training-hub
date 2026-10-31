@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { composeRunSummary, normalizeRunBody } from "@/lib/runInput";
+import { ignoreGarminId } from "@/lib/runReview";
 
 export const runtime = "nodejs";
 
@@ -56,9 +57,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { error } = await supabaseAdmin().from("runs").delete().eq("id", id);
+  const db = supabaseAdmin();
+  const { data: run } = await db.from("runs").select("garmin_activity_id").eq("id", id).maybeSingle();
+  const { error } = await db.from("runs").delete().eq("id", id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  // Deleting a Garmin run means it shouldn't come back on the next sync.
+  if (run?.garmin_activity_id) await ignoreGarminId(Number(run.garmin_activity_id));
   return NextResponse.json({ ok: true });
 }

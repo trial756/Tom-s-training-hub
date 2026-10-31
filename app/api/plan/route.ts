@@ -195,7 +195,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
     // ── What actually happened, per day (every day of every touched week) ──
     const logs: Record<string, DayLog> = {};
     for (const week of stripWeeks) {
-      for (const date of weekDatesFrom(week)) logs[date] = { hasWorkout: false, hasRun: false, summary: "", regions: [] };
+      for (const date of weekDatesFrom(week)) logs[date] = { hasWorkout: false, hasRun: false, summary: "", regions: [], runs: [] };
     }
 
     for (const workout of workouts) {
@@ -222,6 +222,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         ...logs[date],
         hasRun: true,
         summary: [logs[date].summary, label].filter(Boolean).join(" · "),
+        runs: [...(logs[date].runs ?? []), { type: run.run_type ?? null, miles: run.distance_miles == null ? null : Number(run.distance_miles) }],
       };
     }
 

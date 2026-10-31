@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
+import UndoToast from "@/components/UndoToast";
+import { garminLine, plannedLine, type PendingItem } from "@/components/PendingRunReview";
 import type { IntervalSet, Run, RunIntervals } from "@/lib/types";
-import { RUN_TYPES } from "@/lib/types";
+import { FEEL_CHIPS, RUN_TYPES } from "@/lib/types";
 import { formatDuration, formatLoggedAt, formatPace, localDateKey, loggedAtFor } from "@/lib/format";
 import { notifyDataChanged } from "@/lib/refresh";
 import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
+import { digitsToClock, parseClock, secondsToDigits } from "@/lib/clock";
 import type { WeekPlan } from "@/lib/planner/types";
 import { formatPaceRange, plannedRunFor, runPrefillQuery, type PlannedRun } from "@/lib/planner/runPlan";
 import {
@@ -29,13 +32,7 @@ const RUN_TYPE_COLORS: Record<string, string> = {
   Other: "bg-gray-500/20 text-gray-300",
 };
 
-const FEEL_CHIPS = [
-  { emoji: "🔥", label: "Great" },
-  { emoji: "😊", label: "Good" },
-  { emoji: "😐", label: "Okay" },
-  { emoji: "😓", label: "Tough" },
-  { emoji: "💀", label: "Rough" },
-];
+
 
 // Goal marathon pace is 8:01/mi (481s). Green = at or ahead of goal, amber =
 // within 60s of it, red = more than 60s slower. Applied uniformly regardless
@@ -50,30 +47,6 @@ function paceColorClass(paceSecondsPerMile: number | null | undefined): string {
 
 function todayISO(): string {
   return localDateKey(new Date());
-}
-
-// Accepts "H:MM:SS", "MM:SS", or a bare number of seconds/minutes.
-function parseClock(input: string): number | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-  const parts = trimmed.split(":").map((p) => Number(p));
-  if (parts.some((p) => Number.isNaN(p))) return null;
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  return parts[0];
-}
-
-// Formats a raw digit string (no colons) as a clock value, building from the
-// right: last 2 digits are seconds, the next 2 are minutes, anything left
-// over is hours. "10517" -> "1:05:17", "844" -> "8:44". Deleting the last
-// digit and reformatting naturally shortens it, so this doubles as the
-// backspace behavior too.
-function digitsToClock(digits: string): string {
-  const d = digits.replace(/\D/g, "");
-  if (!d) return "";
-  if (d.length <= 2) return d;
-  if (d.length <= 4) return `${d.slice(0, d.length - 2)}:${d.slice(-2)}`;
-  return `${d.slice(0, d.length - 4)}:${d.slice(-4, -2)}:${d.slice(-2)}`;
 }
 
 interface FormState {
@@ -149,6 +122,10 @@ export default function RunsPage() {
   const [search, setSearch] = useState("");
   // Editing an existing run: the same form, saved over the original.
   const [editing, setEditing] = useState<Run | null>(null);
+  // A Garmin run awaiting confirmation, open in the form (editing is set too).
+  const [reviewing, setReviewing] = useState<PendingItem | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   // Today's planned run, offered as a one-tap prefill.
   const [todayPlan, setTodayPlan] = useState<{ run: PlannedRun; query: string } | null>(null);
   // Set when the form was filled from the plan: the target, kept in view above the form.
@@ -168,6 +145,7 @@ export default function RunsPage() {
       applyPlanParams(params);
     }
     loadTodayPlan();
+    if (!editId && !params.get("plan")) loadPending(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -206,6 +184,23 @@ export default function RunsPage() {
     });
   }
 
+  /** Runs awaiting confirmation; with `open`, the newest goes straight into the form. */
+  async function loadPending(open: boolean) {
+    try {
+      const json = await fetch("/api/runs/pending").then((r) => r.json());
+      const items = (json.pending ?? []) as PendingItem[];
+      setPendingCount(items.length);
+      if (open && items[0]) startReview(items[0]);
+    } catch {
+      // The form works without it.
+    }
+  }
+
+  function startReview(item: PendingItem) {
+    startEdit(item.run);
+    setReviewing(item);
+  }
+
   function startEdit(r: Run) {
     setEditing(r);
     setFromPlan(null);
@@ -221,6 +216,7 @@ export default function RunsPage() {
   }
 
   function resetForm() {
+    setReviewing(null);
     setForm(EMPTY_FORM);
     setRunType("");
     setFeel("");
@@ -286,8 +282,10 @@ export default function RunsPage() {
       // An edit keeps its original time unless the date itself moved.
       if (!editing || date !== localDateKey(new Date(editing.logged_at))) payload.logged_at = loggedAtFor(date);
 
-      const res = await fetch(editing ? `/api/runs/${editing.id}` : "/api/runs", {
-        method: editing ? "PATCH" : "POST",
+      const wasReviewing = !!reviewing;
+      // Confirming writes the coaching, for the run type picked here.
+      const res = await fetch(reviewing ? `/api/runs/${reviewing.run.id}/confirm` : editing ? `/api/runs/${editing.id}` : "/api/runs", {
+        method: reviewing ? "POST" : editing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -298,6 +296,8 @@ export default function RunsPage() {
       if (!editing) setTodayPlan(null);
       resetForm();
       loadRecent();
+      // The next run waiting, if any, opens in turn.
+      if (wasReviewing) loadPending(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -403,11 +403,57 @@ export default function RunsPage() {
   return (
     <div>
       <PageHeader
-        title={editing ? "Edit Run" : "Log a Run"}
-        subtitle={editing ? "Change anything, then save — the original entry is updated." : "Fill in whatever you've got — nothing is required."}
+        title={reviewing ? "Confirm Garmin Run" : editing ? "Edit Run" : "Log a Run"}
+        subtitle={
+          reviewing
+            ? "From your watch — add how it felt, fix anything, then confirm."
+            : editing
+            ? "Change anything, then save — the original entry is updated."
+            : "Fill in whatever you've got — nothing is required."
+        }
       />
 
-      {editing ? (
+      {reviewing ? (
+        <div className="mx-4 mb-4 rounded-xl border border-accent/40 bg-accent/5 px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-accent">
+            Awaiting confirmation · {formatLoggedAt(reviewing.run.logged_at, reviewing.run.created_at)}
+          </p>
+          {plannedLine(reviewing.planned) && <p className="mt-0.5 text-sm text-ink">{plannedLine(reviewing.planned)}</p>}
+          {garminLine(reviewing.run) && <p className="mt-0.5 text-[11px] text-faint">Garmin: {garminLine(reviewing.run)}</p>}
+          {reviewing.planned?.run && runType && runType !== reviewing.planned.run.type && (
+            <p className="mt-1 text-[11px] text-fuel">
+              Different from the plan — coaching will follow {runType}, and the planned {reviewing.planned.run.type.toLowerCase()} moves later
+              in the week.
+            </p>
+          )}
+          <div className="mt-1 flex gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                setDeletingId(reviewing.run.id);
+                resetForm();
+              }}
+              className="min-h-[44px] text-xs font-semibold text-gray-500 active:text-danger"
+            >
+              Delete run
+            </button>
+            <button type="button" onClick={resetForm} className="min-h-[44px] text-xs font-semibold text-muted">
+              Log a different run
+            </button>
+          </div>
+        </div>
+      ) : !editing && pendingCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => loadPending(true)}
+          className="mx-4 mb-4 flex min-h-[44px] w-[calc(100%-2rem)] items-center justify-between rounded-xl border border-accent/40 bg-accent/5 px-3 py-2 text-left"
+        >
+          <span className="text-sm text-ink">
+            {pendingCount} Garmin run{pendingCount === 1 ? "" : "s"} awaiting confirmation
+          </span>
+          <span className="text-sm font-semibold text-accent">Review</span>
+        </button>
+      ) : editing ? (
         <div className="mx-4 mb-4 flex items-center justify-between gap-2 rounded-xl border border-fuel/40 bg-fuel/10 px-3 py-2">
           <span className="text-xs text-fuel">Editing {formatLoggedAt(editing.logged_at, editing.created_at)} run</span>
           <button type="button" onClick={resetForm} className="min-h-[44px] px-2 text-xs font-semibold text-fuel">
@@ -560,12 +606,37 @@ export default function RunsPage() {
         />
 
         <button type="submit" className="btn-primary mt-4 w-full" disabled={submitting || !hasAnyInput}>
-          {submitting ? (editing ? "Saving…" : "Getting coaching feedback…") : editing ? "Save changes" : "Log Run"}
+          {submitting
+            ? editing && !reviewing
+              ? "Saving…"
+              : "Getting coaching feedback…"
+            : reviewing
+            ? "Confirm run"
+            : editing
+            ? "Save changes"
+            : "Log Run"}
         </button>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </form>
 
-      {submitting && !editing && <Spinner label="Claude is reviewing your run…" />}
+      {submitting && (!editing || reviewing) && <Spinner label="Claude is reviewing your run…" />}
+      {deletingId && (
+        <UndoToast
+          label="Run deleted"
+          onUndo={() => {
+            setDeletingId(null);
+            loadPending(true);
+          }}
+          onExpire={async () => {
+            const id = deletingId;
+            setDeletingId(null);
+            await fetch(`/api/runs/${id}`, { method: "DELETE" });
+            notifyDataChanged("run");
+            loadRecent();
+            loadPending(false);
+          }}
+        />
+      )}
 
       {lastSaved && !submitting && (
         <div className="mt-5 px-4">
@@ -653,6 +724,9 @@ export default function RunsPage() {
                     </span>
                     <span className="text-xs text-gray-500">{formatLoggedAt(r.logged_at, r.created_at)}</span>
                     {r.garmin_activity_id && <span className="text-[10px] font-medium uppercase tracking-wide text-faint">Garmin</span>}
+                    {r.review_status === "pending" && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">Awaiting confirmation</span>
+                    )}
                   </div>
                   <p className="mt-1 text-sm text-gray-300">
                     {r.distance_miles ?? "?"} mi ·{" "}
@@ -663,10 +737,10 @@ export default function RunsPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => startEdit(r)}
+                  onClick={() => (r.review_status === "pending" ? loadPending(true) : startEdit(r))}
                   className="min-h-[44px] shrink-0 px-2 text-xs font-medium text-muted active:text-accent"
                 >
-                  Edit
+                  {r.review_status === "pending" ? "Review" : "Edit"}
                 </button>
               </div>
             ))}
@@ -745,16 +819,6 @@ function ClockField({
 // run at several different paces and how much detail you want to capture
 // varies: "Quick" records one pace per effort type, "Detailed" records each
 // repeat set so ladders and mixed sessions survive intact.
-
-function secondsToDigits(total: number | null): string {
-  if (total == null || total <= 0) return "";
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = Math.round(total % 60);
-  if (h > 0) return `${h}${String(m).padStart(2, "0")}${String(s).padStart(2, "0")}`;
-  if (m > 0) return `${m}${String(s).padStart(2, "0")}`;
-  return String(s);
-}
 
 // Masked clock input that talks in seconds instead of raw digits. Internal
 // digit state is seeded from the incoming value on mount, so switching run

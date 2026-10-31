@@ -317,6 +317,9 @@ function HistoryCard({
             {kind === "run" && item.garmin_activity_id && (
               <span className="text-[10px] font-medium uppercase tracking-wide text-faint">Garmin</span>
             )}
+            {kind === "run" && item.review_status === "pending" && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">Awaiting confirmation</span>
+            )}
           </div>
 
           {kind === "workout" && (
