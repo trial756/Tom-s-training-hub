@@ -7,6 +7,8 @@ import { buildExerciseLookup } from "@/lib/muscleCoverage";
 import { buildPlannerContext } from "@/lib/planner/context";
 import { scheduleWeek, type DayLog } from "@/lib/planner/schedule";
 import { fitWeekToTargets, reconcileMileage } from "@/lib/planner/mileage";
+import { liftTrends } from "@/lib/planner/progression";
+import { applyStrengthRules } from "@/lib/planner/strengthRules";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
 import { buildMarathonPlan, currentWeek } from "@/lib/marathonPlan";
 import { RUN_TYPES, type RunType } from "@/lib/types";
@@ -16,7 +18,8 @@ const marathonWeeks = buildMarathonPlan();
 export const runtime = "nodejs";
 
 /** How far back the planner looks when building its picture. */
-const HISTORY_DAYS = 60;
+// Long enough to see a lift stall (three sessions over three-plus weeks).
+const HISTORY_DAYS = 120;
 
 function weekDatesFrom(weekStart: string): string[] {
   return Array.from({ length: 7 }, (_, i) => {
@@ -53,6 +56,19 @@ function toSessions(generated: GeneratedSession[]): PlanSession[] {
       regions: cleanRegions(e.regions),
     })),
   }));
+}
+
+/** Every exercise name ever logged, normalized — what makes a movement "new". */
+async function loggedExerciseNames(): Promise<Set<string>> {
+  const { data } = await supabaseAdmin().from("workouts").select("exercises");
+  const names = new Set<string>();
+  for (const w of data ?? []) {
+    for (const ex of (w.exercises ?? []) as { name?: string }[]) {
+      const key = normalizeExerciseName(ex?.name ?? "");
+      if (key) names.add(key);
+    }
+  }
+  return names;
 }
 
 /** Days either side of today in the strip — 11 days with today in the middle. */
@@ -155,10 +171,16 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
 
     async function generate(week: string, context: ReturnType<typeof buildPlannerContext>): Promise<StoredWeek> {
       const generated = await generateWeekPlan(JSON.stringify(context, null, 2));
-      const { sessions } = fitWeekToTargets(toSessions(generated.sessions ?? []), {
+      const fitted = fitWeekToTargets(toSessions(generated.sessions ?? []), {
         weeklyTarget: context.marathon?.weeklyMileage ?? null,
         longRunMiles: context.marathon?.longRunMiles ?? null,
         milesAlreadyRun: context.milesThisWeek,
+      }).sessions;
+      // Structure, loads, stall breakers and "new" tags are rules, not model output.
+      const sessions = applyStrengthRules(fitted, {
+        trends: liftTrends(workouts, today),
+        knownNames: await loggedExerciseNames(),
+        fatigued: context.fatigued,
       });
       const row = {
         week_start: week,

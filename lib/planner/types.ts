@@ -14,6 +14,8 @@ export interface PlanExercise {
   cue: string | null;
   isNew: boolean;
   regions: MuscleRegion[];
+  /** Why this load or slot — set by the strength rules ("hit 140x6 — add 5 lb"). */
+  note?: string | null;
 }
 
 /**
@@ -153,6 +155,13 @@ export interface PlannerContext {
   typicalRunMiles: number;
   anchors: LiftAnchor[];
   strengthDose: StrengthDose;
+  /** Each logged lift's trend (progressing / stalled / regressing) and the stalls with their fixes. */
+  progress: {
+    lifts: { lift: string; pattern: string; status: string; trend: string }[];
+    stalls: { lift: string; status: string; trend: string; breakers: string[] }[];
+  };
+  /** Mileage jump or rough runs: hold leg-lift loads. */
+  fatigued: boolean;
   /** Last fortnight of runs, newest first — how hard they were and how they felt. */
   recentRuns: { date: string; type: string | null; miles: number | null; feel: string | null }[];
   /** Last few lift sessions, newest first, so the week can rotate movements rather than repeat them. */

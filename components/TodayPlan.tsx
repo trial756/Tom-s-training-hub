@@ -248,6 +248,7 @@ export default function TodayPlan({
                   </span>
                 </div>
                 {ex.cue && <p className="mt-1 text-[11px] leading-snug text-faint">{ex.cue}</p>}
+                {ex.note && <p className="mt-1 text-[11px] leading-snug text-muted">{ex.note}</p>}
               </li>
             ))}
           </ul>

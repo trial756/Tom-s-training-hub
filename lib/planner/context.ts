@@ -3,6 +3,8 @@ import { MUSCLE_LABELS, MUSCLE_REGIONS, type MuscleRegion } from "@/lib/muscles"
 import { buildExerciseLookup, computeMuscleActivity, type ExerciseLookup } from "@/lib/muscleCoverage";
 import { buildMarathonPlan, currentWeek, RACE_DATE } from "@/lib/marathonPlan";
 import { strengthDoseFor } from "@/lib/planner/strength";
+import { liftTrends } from "@/lib/planner/progression";
+import { progressReport } from "@/lib/planner/strengthRules";
 import type { LiftAnchor, PlannerContext, RegionSnapshot } from "@/lib/planner/types";
 
 /** A region counts as neglected once it's gone this long without direct work. */
@@ -225,6 +227,11 @@ export function buildPlannerContext(opts: {
     );
   }
 
+  // Lift trends over the whole history window: what's climbing, what's stuck.
+  const progress = progressReport(liftTrends(opts.workouts, today));
+  const fatigued =
+    roughRuns >= 2 || (!!marathon && avgWeeklyMiles > 0 && marathon.weeklyMileage >= avgWeeklyMiles * 1.3);
+
   const strengthDose = strengthDoseFor({
     marathon,
     postRace: !marathon && weekStart > RACE_DATE,
@@ -251,6 +258,8 @@ export function buildPlannerContext(opts: {
     typicalRunMiles,
     anchors,
     strengthDose,
+    progress,
+    fatigued,
     recentRuns,
     recentLifts,
     adjustments,

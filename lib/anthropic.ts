@@ -689,8 +689,8 @@ const weekPlanSchema = {
                 target: {
                   type: ["string", "null"],
                   description:
-                    "Suggested load, based on the athlete's last top set for that lift — e.g. '150 lb' when they " +
-                    "last hit 145. Null for bodyweight movements or ones with no history.",
+                    "Suggested load — for a lift with history this is replaced in code by the progression rules, " +
+                    "so it only matters for movements without history. Null for bodyweight movements.",
                 },
                 cue: {
                   type: ["string", "null"],
@@ -780,7 +780,18 @@ async function requestWeekPlan(contextJson: string, postRace: boolean, extra: st
       "- Rotate variations week to week. recentLifts shows what was just done — if last week's heavy lower was " +
       "split squats, this week might lead with a trap-bar deadlift or step-ups, and the calf work might switch " +
       "between straight-leg and bent-knee.\n" +
-      "- Progress anchor lifts from their last top set when the week allows, hold the load when it doesn't.\n" +
+      "- Read 'progress': every logged lift's trend. Progressing lifts stay and keep climbing. For each lift " +
+      "under 'progress.stalls', keep it in the week but pair it in the same session with one of its listed " +
+      "breakers (the accessory that trains its weak link), and name the stall in that session's rationale. A " +
+      "regressing lift during a mileage jump is fatigue — keep it, don't add volume to it.\n" +
+      "- Structure each lift session: one heavy compound (4–6 reps) first, then at most one more compound from a " +
+      "different family at 8–12 reps, then isolation work, then core. Never two heavy lifts from the same " +
+      "family in a session (incline bench and overhead press are both presses). Across the week give each " +
+      "movement one heavy day and one volume day — e.g. heavy incline press on one push day, the overhead " +
+      "press as the volume lift on another.\n" +
+      "- Write reps as a range that shows the slot (heavy '5-6', volume '8-10', isolation '10-15'). Loads and " +
+      "reps for lifts the athlete has logged are set in code from their history, so suggest a target but don't " +
+      "agonise over it.\n" +
       "- Every entry in 'adjustments' is a reason to change this week — act on each one (lighter lower work, " +
       "a gentler opening, a reintroduction at moderate load) and say so in the affected session's rationale.\n" +
       "- Bias toward what the data says is neglected, and don't repeat what plannedBeforeWeek already covers.\n" +
