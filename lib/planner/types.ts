@@ -43,6 +43,12 @@ export interface PlanSession {
   run?: { type: RunType | null; structure: string | null } | null;
   /** Set when the reconciler added or lengthened this run to close a gap. */
   addedByReconciler?: boolean;
+  /**
+   * Kept from before a replan, pinned to the day it already had. It shows
+   * what that day was asked for but never moves to another day — the new
+   * plan already accounts for whatever it was.
+   */
+  frozen?: boolean;
 }
 
 export type PlanDayStatus = "upcoming" | "today" | "done" | "off_script" | "missed";
@@ -132,6 +138,8 @@ export interface PlannerContext {
   weekStart: string;
   weekEnd: string;
   daysRemaining: number;
+  /** First day still to plan — tomorrow once today has something logged. */
+  planFrom: string;
   marathon: {
     planWeek: number;
     phase: string;

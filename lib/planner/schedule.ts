@@ -164,12 +164,16 @@ export function scheduleWeek(opts: {
     assignment.set(today, todayPrior.id);
     consumed.add(todayPrior.id);
     statuses.set(today, "done");
+  } else if (todayPrior?.frozen) {
+    // Kept through a replan: today keeps what it had, even half logged.
+    assignment.set(today, todayPrior.id);
+    consumed.add(todayPrior.id);
   }
 
   // ── Place what's left on the days that remain ─────────────────────────
   const openDays = weekDates.filter((d) => d >= today && !assignment.has(d));
   const pending = sessions
-    .filter((s) => !consumed.has(s.id) && !Array.from(assignment.values()).includes(s.id))
+    .filter((s) => !s.frozen && !consumed.has(s.id) && !Array.from(assignment.values()).includes(s.id))
     .sort((a, b) => a.priority - b.priority);
 
   const dowOf = (date: string) => new Date(`${date}T00:00:00`).getDay();

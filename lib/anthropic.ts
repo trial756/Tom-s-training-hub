@@ -605,7 +605,8 @@ const weekPlanSchema = {
     sessions: {
       type: "array",
       description:
-        "One session for every remaining day of the week (daysRemaining in the data — seven for a full week), " +
+        "One session for every remaining day of the week, from planFrom to weekEnd (daysRemaining in the data — " +
+        "seven for a full week). Days before planFrom are already done; never plan a session for them. " +
         "runs included. Don't emit more lift sessions than the athlete's cadence supports; the other days stack " +
         "light work with runs instead.",
       items: {
@@ -760,7 +761,9 @@ async function requestWeekPlan(contextJson: string, postRace: boolean, extra: st
   return parseWithTool<GeneratedWeekPlan>({
     system:
       (postRace ? BUILD_FRAME : MARATHON_FRAME) +
-      "Every day is a training day: no rest days and no blank days. Plan one session for each remaining day, " +
+      "Every day is a training day: no rest days and no blank days. Plan one session for each remaining day " +
+      "(planFrom through weekEnd — earlier days, today included once it's logged, are done and only shape the " +
+      "rest: build on loggedThisWeek rather than repeating it), " +
       "and get the most out of each one — the athlete wants to optimise limited time, not spread it thin.\n\n" +
       "Stack the light work. An easy run never stands alone: give it a mobility, yoga, stretching, core or " +
       "small-muscle accessory block in the same session (kind 'run', with the block as its exercises). Never " +

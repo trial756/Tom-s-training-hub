@@ -238,14 +238,37 @@ export function buildPlannerContext(opts: {
     liftDaysPerWeek,
   });
 
-  const fromKey = todayKey > weekStart ? todayKey : weekStart;
+  // Today is already spoken for once anything is logged on it — a replan
+  // starts tomorrow rather than handing out a second session for today.
+  const todayLogged =
+    opts.workouts.some((w) => localDateKey(new Date(w.logged_at)) === todayKey) ||
+    opts.runs.some((r) => localDateKey(new Date(r.logged_at)) === todayKey);
+  const firstOpenKey = todayLogged ? localDateKey(shiftDays(today, 1)) : todayKey;
+  const fromKey = firstOpenKey > weekStart ? firstOpenKey : weekStart;
   const daysRemaining = Math.max(0, daysBetweenKeys(fromKey, weekEnd) + 1);
+
+  // Gym days already banked this week come off the dose, so a midweek replan
+  // plans what's left rather than squeezing a full week into the remaining days.
+  const liftDaysDone = new Set(
+    opts.workouts.map((w) => localDateKey(new Date(w.logged_at))).filter((d) => d >= weekStart && d < fromKey)
+  ).size;
+  const remainingDose =
+    liftDaysDone > 0
+      ? {
+          ...strengthDose,
+          liftSessions: Math.min(daysRemaining, Math.max(0, strengthDose.liftSessions - liftDaysDone)),
+          guidance:
+            `${strengthDose.guidance} ${liftDaysDone} gym day(s) are already logged this week (see loggedThisWeek); ` +
+            "the count above is what's left — plan around what was trained, not over it.",
+        }
+      : strengthDose;
 
   return {
     today: todayKey,
     weekStart,
     weekEnd,
     daysRemaining,
+    planFrom: fromKey,
     marathon,
     milesThisWeek,
     milesRemaining: marathon ? Math.max(0, Math.round((marathon.weeklyMileage - milesThisWeek) * 10) / 10) : 0,
@@ -257,7 +280,7 @@ export function buildPlannerContext(opts: {
     avgWeeklyMiles,
     typicalRunMiles,
     anchors,
-    strengthDose,
+    strengthDose: remainingDose,
     progress,
     fatigued,
     recentRuns,

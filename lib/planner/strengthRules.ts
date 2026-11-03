@@ -25,6 +25,8 @@ interface Context {
   knownNames: Set<string>;
   /** Big mileage jump or rough runs — no load increases on leg lifts. */
   fatigued: boolean;
+  /** Sessions already behind us this week (kept through a replan). */
+  alreadyThisWeek?: PlanSession[];
 }
 
 const isLift = (s: PlanSession) => s.kind === "lift" || s.kind === "lift_and_run";
@@ -45,6 +47,19 @@ export function applyStrengthRules(input: PlanSession[], ctx: Context): PlanSess
   const heavyThisWeek = new Set<Pattern>();
   // A stalled lift gets its breaker once a week, beside its first appearance.
   const brokenThisWeek = new Set<string>();
+  // What earlier days already covered: a pattern that went heavy on Sunday
+  // gets its volume day if it comes back on Thursday.
+  for (const s of ctx.alreadyThisWeek ?? []) {
+    if (!isLift(s)) continue;
+    for (const ex of s.exercises) {
+      const pattern = patternOf(ex.name);
+      if (roleFromReps(ex.reps, pattern) === "heavy") heavyThisWeek.add(pattern);
+      if (/stall breaker/.test(ex.note ?? "")) {
+        const m = /\(([^:]+):/.exec(ex.note ?? "");
+        if (m) brokenThisWeek.add(normalizeExerciseName(m[1]));
+      }
+    }
+  }
   const order = [...sessions].sort((a, b) => (a.preferredDow ?? 9) - (b.preferredDow ?? 9));
 
   for (const session of order) {

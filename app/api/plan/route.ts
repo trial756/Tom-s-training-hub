@@ -169,33 +169,60 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         plannedBeforeWeek,
       });
 
-    async function generate(week: string, context: ReturnType<typeof buildPlannerContext>): Promise<StoredWeek> {
+    /**
+     * Regenerates a week. Days before `context.planFrom` (the past, and today
+     * once anything is logged on it) keep the sessions they had, pinned in
+     * place; only the days still ahead are replanned.
+     */
+    async function generate(
+      week: string,
+      context: ReturnType<typeof buildPlannerContext>,
+      previous?: StoredWeek
+    ): Promise<StoredWeek> {
+      const keptAssignments: Record<string, string> = {};
+      const kept: PlanSession[] = [];
+      for (const s of previous?.sessions ?? []) {
+        const date = previous?.assignments?.[s.id];
+        if (date && date < context.planFrom) {
+          kept.push({ ...s, frozen: true });
+          keptAssignments[s.id] = date;
+        }
+      }
+      if (context.daysRemaining === 0 && previous) return previous;
+
       const generated = await generateWeekPlan(JSON.stringify(context, null, 2));
-      const fitted = fitWeekToTargets(toSessions(generated.sessions ?? []), {
+      // Fresh ids that can't collide with the sessions being kept.
+      const tag = Date.now().toString(36);
+      const fresh = toSessions(generated.sessions ?? []).map((s) => (kept.length ? { ...s, id: `${s.id}-${tag}` } : s));
+      const fitted = fitWeekToTargets(fresh, {
         weeklyTarget: context.marathon?.weeklyMileage ?? null,
         longRunMiles: context.marathon?.longRunMiles ?? null,
         milesAlreadyRun: context.milesThisWeek,
       }).sessions;
       // Structure, loads, stall breakers and "new" tags are rules, not model output.
-      const sessions = applyStrengthRules(fitted, {
-        trends: liftTrends(workouts, today),
-        knownNames: await loggedExerciseNames(),
-        fatigued: context.fatigued,
-      });
+      const sessions = [
+        ...kept,
+        ...applyStrengthRules(fitted, {
+          trends: liftTrends(workouts, today),
+          knownNames: await loggedExerciseNames(),
+          fatigued: context.fatigued,
+          alreadyThisWeek: kept,
+        }),
+      ];
       const row = {
         week_start: week,
         plan_week: context.marathon?.planWeek ?? null,
         phase: context.marathon?.phase ?? null,
         headline: generated.headline,
         sessions,
-        assignments: {},
+        assignments: keptAssignments,
         context,
         generated_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       const { error: upsertError } = await db.from("week_plans").upsert(row, { onConflict: "week_start" });
       if (upsertError) throw new Error(upsertError.message);
-      const stored = { week_start: week, sessions, assignments: {}, headline: generated.headline };
+      const stored = { week_start: week, sessions, assignments: keptAssignments, headline: generated.headline };
       storedByWeek.set(week, stored);
       return stored;
     }
@@ -251,7 +278,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
     // ── Current week: stored, or generated once, then placed ────────────
     const context = contextFor(weekStart);
     let current = storedByWeek.get(weekStart);
-    if (!current || !isPlanned(current) || regenerateWeek === weekStart) current = await generate(weekStart, context);
+    if (!current || !isPlanned(current) || regenerateWeek === weekStart) current = await generate(weekStart, context, current);
 
     const scheduled = scheduleWeek({
       sessions: [...(current.sessions ?? [])],
@@ -349,7 +376,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         });
         continue;
       }
-      if (!stored || regenerateWeek === week) stored = await generate(week, futureContext);
+      if (!stored || regenerateWeek === week) stored = await generate(week, futureContext, stored);
 
       // Placed as if the week started now, then every day reads as upcoming.
       const placed = scheduleWeek({
