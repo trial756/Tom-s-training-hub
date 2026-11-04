@@ -118,6 +118,11 @@ export default function TodayPlan({
       )}
 
       {headline && <p className="mb-2 text-sm font-semibold text-ink">{headline}</p>}
+      {(week?.warnings ?? []).map((w) => (
+        <p key={w} className="mb-2 text-xs text-danger">
+          {w}
+        </p>
+      ))}
 
       {isCurrentWeek && mileageNote && (
         <p className="mb-3 rounded-lg border border-run/25 bg-run/10 p-2 text-xs leading-snug text-gray-300">
@@ -186,6 +191,11 @@ export default function TodayPlan({
           )}
         </div>
 
+        {selected?.contextNote && session && <p className="mb-2 text-[11px] text-faint">{selected.contextNote}</p>}
+        {selected?.adjustNote && (
+          <p className="mb-2 rounded-lg bg-accent/10 p-2 text-xs text-accent">{selected.adjustNote}</p>
+        )}
+        {selected?.warning && <p className="mb-2 rounded-lg bg-danger/10 p-2 text-xs text-danger">{selected.warning}</p>}
         {selected?.status === "off_script" && (
           <p className="mb-2 rounded-lg bg-fuel/10 p-2 text-xs text-fuel">
             You trained something else — this moved to a later day.
