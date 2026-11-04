@@ -629,8 +629,11 @@ const weekPlanSchema = {
           preferred_dow: {
             type: ["integer", "null"],
             description:
-              "Preferred day of week, 0=Sunday through 6=Saturday, or null if it can go anywhere. Long runs " +
-              "usually belong on a weekend. This is a hint — the scheduler makes the final placement.",
+              "Preferred day of week, 0=Sunday through 6=Saturday, or null if it can go anywhere. The training " +
+              "week runs Sunday (0, its FIRST day) to Saturday (6, its last), so only pick days from planFrom " +
+              "onward — a day before planFrom has already happened. The long run usually belongs on Saturday. " +
+              "This is a hint: the scheduler makes the final placement and keeps hard days apart, so never name " +
+              "weekdays in a title or rationale — say 'the day before the long run', not 'Friday'.",
           },
           miles: {
             type: ["number", "null"],
