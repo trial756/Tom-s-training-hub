@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { StructuredRunInput } from "@/lib/anthropic";
 import { localDateKey, shiftDays } from "@/lib/format";
 import { searchActivities } from "@/lib/garmin";
+import { syncWellness, type WellnessState } from "@/lib/garminWellness";
 import { plannedRunFor } from "@/lib/planner/runPlan";
 import type { PlanSession } from "@/lib/planner/types";
 import { composeRunSummary } from "@/lib/runInput";
@@ -46,6 +47,8 @@ type GarminActivity = Record<string, unknown> & { activityType?: { typeKey?: str
 interface SyncState {
   lastRecentSync?: string;
   backfill?: { done: boolean; start: number };
+  /** Daily Body Battery / HRV backfill cursor (lib/garminWellness.ts). */
+  wellness?: WellnessState;
 }
 
 export interface SyncResult {
@@ -390,6 +393,12 @@ export async function syncGarmin(opts: { force?: boolean } = {}): Promise<SyncRe
     })) as GarminActivity[];
     add(await importActivities(Array.isArray(recent) ? recent : [], { fresh: true }));
     state.lastRecentSync = new Date().toISOString();
+    // Daily wellness rides along; a failure there never blocks runs.
+    try {
+      state.wellness = await syncWellness(state.wellness, BACKFILL_FROM);
+    } catch (err) {
+      console.error("Garmin wellness sync failed:", err instanceof Error ? err.message : err);
+    }
   }
 
   if (!backfill.done) {

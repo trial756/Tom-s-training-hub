@@ -2,7 +2,7 @@
 
 This app is being migrated from a Claude.ai artifact (React + local key-value storage) to a real hosted app: **React + Tailwind + Supabase (Postgres) + Vercel**. This document captures everything the artifact version already does, so the rebuild matches it feature-for-feature before extending further.
 
-**Supabase project ID:** `yqprtirfgtdxdmkktoya` — tables already created: `workouts`, `runs`, `meals`, `favorites` (plus `exercise_muscles`, `week_plans`, `sync_state`) (RLS on, zero public policies — app talks to Supabase via service-role key server-side only).
+**Supabase project ID:** `yqprtirfgtdxdmkktoya` — tables already created: `workouts`, `runs`, `meals`, `favorites` (plus `exercise_muscles`, `week_plans`, `sync_state`, `garmin_daily`) (RLS on, zero public policies — app talks to Supabase via service-role key server-side only).
 
 ---
 
@@ -11,7 +11,7 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 - Also entered: **half marathon, February 28, 2027** — for fun, no dedicated training block
 - After Dec 13 the focus becomes **muscle and athleticism** (hypertrophy plus power, speed, agility, conditioning)
 - Goal time: **3:30:00** · Goal pace: **8:01/mi**
-- Bodyweight: **160 lbs**
+- Bodyweight: **158 lbs** (Nov 2026; down from 173 lbs in Feb 2026)
 - Training block: 27 weeks, Sunday–Saturday training weeks
 
 ---
@@ -79,6 +79,7 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 - Search bar; pace vs. 8:01 goal color-coded (green=ahead, amber=close, red=slow)
 - **Garmin import** (`lib/garminSync.ts`, Garmin Connect Personal API, key in `GARMIN_PERSONAL_API_KEY`): runs from the watch arrive on their own — synced whenever the app opens or returns to the foreground (server-throttled to every 10 min) plus a daily Vercel cron. One-time backfill from Jun 14 2026 (block start), in chunks. Each Garmin activity is imported once (`runs.garmin_activity_id`, unique) and never rewritten, so app edits stick. A Garmin run on a day with a hand-logged run: within 10% on distance and time → Garmin's numbers, keeping feel/notes/shoes/run type; further apart → the logged numbers stay (blanks filled), entry linked; distances >50% apart → a separate run (double day). New imports take run type from that day's plan (else pace) and the last-used shoes.
 - **Confirming Garmin runs** (`lib/runReview.ts`): a new Garmin run from the last 2 days lands as `review_status = 'pending'` — it counts toward mileage, plan and body map at once, but gets no coaching yet. A pop-up (app-wide, `components/PendingRunReview.tsx`) shows it prefilled with the day's plan and Garmin extras; the athlete adds feel, fixes anything and confirms (`POST /api/runs/[id]/confirm`), which writes coaching for the run type they chose — told what the plan had, so an off-plan run is coached as itself with the swap noted. The X closes the pop-up for good and opens the Runs tab, where the run waits prefilled ("Confirm Garmin Run") until confirmed or deleted. When a newer Garmin run arrives, a run still waiting is confirmed as it stands. Backfilled runs never pop up or get coaching. Deleting a Garmin run records its id (`sync_state.garmin_ignored`) so it isn't re-imported. Extras (training effect, load, HR zones, fastest splits, Body Battery change) live in `runs.garmin_data`. Imported runs show a GARMIN tag; Edit works as for any run.
+- **Garmin daily wellness** (`lib/garminWellness.ts` → `garmin_daily`, one row per day): Body Battery (charged, drained, daily high/low) and HRV (last-night and weekly average), the only wellness data the personal key returns (`/api/garmin/probe` checks which endpoints answer; sleep, resting HR, VO2 max, stress and weight 404). Rides along with each due sync; backfilled from Jun 14 in 28-day chunks, then the last 7 days refreshed each time. A wellness failure never blocks the run sync.
 
 ### Fuel (meal entry)
 - **Favorites row** at top — meals become favorites two ways: (1) manually starred after logging, (2) automatically once logged 3+ times. Sorted starred-first then by frequency. Tapping a favorite **prefills** the text box (does not auto-submit).
