@@ -10,6 +10,7 @@ import { fitWeekToTargets, reconcileMileage } from "@/lib/planner/mileage";
 import { liftTrends } from "@/lib/planner/progression";
 import { applyStrengthRules } from "@/lib/planner/strengthRules";
 import { fillGaps } from "@/lib/planner/gaps";
+import { isHard, validateWeek } from "@/lib/planner/validate";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
 import { buildMarathonPlan, currentWeek } from "@/lib/marathonPlan";
 import { RUN_TYPES, type RunType } from "@/lib/types";
@@ -309,6 +310,21 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
       typicalRunMiles: context.typicalRunMiles,
     });
 
+    // The week's last check: hard days apart, no legs before the long run,
+    // mileage in range, words that match where things landed.
+    const checked = validateWeek({
+      days: reconciled.days,
+      sessions: reconciled.sessions,
+      today: todayKey,
+      weeklyTarget: context.marathon?.weeklyMileage ?? null,
+      milesDone: context.milesThisWeek,
+    });
+    reconciled.days = checked.days;
+    reconciled.sessions = checked.sessions;
+    const currentHard = checked.days
+      .filter((d) => d.sessionId && isHard(checked.sessions.find((s) => s.id === d.sessionId)))
+      .map((d) => d.date);
+
     await persistPlacement(weekStart, reconciled.sessions, reconciled.days);
 
     // ── The other weeks the strip touches ───────────────────────────────
@@ -328,7 +344,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
 
       if (week === weekStart) {
         results.push({
-          meta: { ...baseMeta, headline: current.headline ?? "", pending: false },
+          meta: { ...baseMeta, headline: current.headline ?? "", pending: false, warnings: checked.warnings },
           sessions: reconciled.sessions,
           days: reconciled.days,
         });
@@ -405,9 +421,22 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         avgWeeklyMiles: futureContext.avgWeeklyMiles,
         typicalRunMiles: futureContext.typicalRunMiles,
       });
-      const days = futureReconciled.days.map((d) => ({ ...d, status: "upcoming" as const }));
-      await persistPlacement(week, futureReconciled.sessions, days);
-      results.push({ meta: { ...baseMeta, headline: stored.headline ?? "", pending: false }, sessions: futureReconciled.sessions, days });
+      const futureChecked = validateWeek({
+        days: futureReconciled.days.map((d) => ({ ...d, status: "upcoming" as const })),
+        sessions: futureReconciled.sessions,
+        // Every day of a future week may still move.
+        today: localDateKey(shiftDays(keyToDate(week), -1)),
+        outsideHard: currentHard,
+        weeklyTarget: futureContext.marathon?.weeklyMileage ?? null,
+        milesDone: 0,
+      });
+      const days = futureChecked.days;
+      await persistPlacement(week, futureChecked.sessions, days);
+      results.push({
+        meta: { ...baseMeta, headline: stored.headline ?? "", pending: false, warnings: futureChecked.warnings },
+        sessions: futureChecked.sessions,
+        days,
+      });
     }
 
     // ── Stitch the strip together ───────────────────────────────────────

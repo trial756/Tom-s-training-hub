@@ -67,6 +67,12 @@ export interface PlanDay {
   /** What has been logged on this day so far, so each half of a run + lift day can show as done. */
   loggedRun?: boolean;
   loggedLift?: boolean;
+  /** Set when the weekly check moved this day's session (lib/planner/validate.ts). */
+  adjustNote?: string | null;
+  /** A rule the weekly check couldn't fix — shown on the card. */
+  warning?: string | null;
+  /** Where the day sits against the long run, computed after placement. */
+  contextNote?: string | null;
 }
 
 /** One training week touched by the day strip. */
@@ -79,6 +85,8 @@ export interface PlanWeekMeta {
   weeklyMileage: number | null;
   /** A future week with no plan yet — the client asks for it separately. */
   pending: boolean;
+  /** Week-level notes from the weekly check, e.g. mileage well off target. */
+  warnings?: string[];
 }
 
 /**
