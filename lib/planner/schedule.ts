@@ -35,9 +35,14 @@ function runMatched(session: PlanSession, log: DayLog): boolean {
   );
 }
 
-/** A session that leaves the legs cooked shouldn't sit next to a key run. */
+/**
+ * A long, tempo, marathon-pace or interval run — decided by the run type in
+ * code, not by the model's taxes_legs flag, which it sometimes leaves off.
+ */
 function isKeyRun(session: PlanSession): boolean {
-  return (session.kind === "run" || session.kind === "lift_and_run") && session.taxesLegs;
+  if (session.kind !== "run" && session.kind !== "lift_and_run") return false;
+  const planned = plannedRunFor(session);
+  return session.taxesLegs || (!!planned && KEY_RUN_TYPES.has(planned.type));
 }
 
 /**
@@ -183,8 +188,44 @@ export function scheduleWeek(opts: {
     if (idx >= 0) openDays.splice(idx, 1);
   };
 
-  // Honour day preferences first — a long run asked for Saturday gets it.
-  for (const session of [...pending]) {
+  // Hard sessions (key runs and heavy legs) choose their days first, while
+  // there's still room to space them; everything else fills in around them.
+  // A model's day preference is honoured only when it doesn't put two hard
+  // days side by side — a preference for a day that has already passed (or
+  // is taken) never pushes a key session into a bad slot.
+  const hard = (s: PlanSession) => s.taxesLegs || isKeyRun(s);
+  const isLong = (s: PlanSession) => plannedRunFor(s)?.type === "Long";
+  const hardDates = new Set(
+    Array.from(assignment.entries())
+      .filter(([, id]) => {
+        const s = byId.get(id);
+        return s ? hard(s) : false;
+      })
+      .map(([date]) => date)
+  );
+  const nextToHard = (date: string) => {
+    for (const key of hardDates) if (Math.abs(daysBetweenKeys(key, date)) <= 1) return true;
+    return false;
+  };
+
+  // The long run first (it anchors the week), then other key runs, then heavy
+  // legs; each by priority within its group.
+  const rank = (s: PlanSession) => (isLong(s) ? 0 : isKeyRun(s) ? 1 : 2);
+  const hardOnes = pending.filter(hard).sort((a, b) => rank(a) - rank(b) || a.priority - b.priority);
+  for (const session of hardOnes) {
+    if (openDays.length === 0) break;
+    const spaced = openDays.filter((d) => !nextToHard(d));
+    const wanted = session.preferredDow == null ? undefined : spaced.find((d) => dowOf(d) === session.preferredDow);
+    // Without a usable preference the long run goes as late as the spacing
+    // allows (the weekend, after the week's other work); others go earliest.
+    const date = wanted ?? (isLong(session) ? spaced[spaced.length - 1] : spaced[0]) ?? (isLong(session) ? openDays[openDays.length - 1] : openDays[0]);
+    take(date, session);
+    hardDates.add(date);
+    pending.splice(pending.indexOf(session), 1);
+  }
+
+  // Then the rest: their preferred day if it's still open, else the first open day.
+  for (const session of [...pending].sort((a, b) => a.priority - b.priority)) {
     if (session.preferredDow == null) continue;
     const match = openDays.find((d) => dowOf(d) === session.preferredDow);
     if (match) {
@@ -192,41 +233,9 @@ export function scheduleWeek(opts: {
       pending.splice(pending.indexOf(session), 1);
     }
   }
-
-  // Key run days are now known; keep leg-taxing lifts off their neighbours,
-  // and keep hard days apart from each other — hard days hard, easy days easy.
-  const keyRunDates = new Set(
-    Array.from(assignment.entries())
-      .filter(([, id]) => {
-        const s = byId.get(id);
-        return s ? isKeyRun(s) : false;
-      })
-      .map(([date]) => date)
-  );
-  const hardDates = new Set(
-    Array.from(assignment.entries())
-      .filter(([, id]) => byId.get(id)?.taxesLegs)
-      .map(([date]) => date)
-  );
-  const adjacentTo = (dates: Set<string>, date: string) => {
-    for (const key of dates) {
-      if (Math.abs(daysBetweenKeys(key, date)) === 1) return true;
-    }
-    return false;
-  };
-
-  // Leg-taxing sessions choose their days first, while there's still room
-  // to space them out; the easy work fills in around them.
-  const placeOrder = [...pending].sort((a, b) => Number(b.taxesLegs) - Number(a.taxesLegs));
-  for (const session of placeOrder) {
+  for (const session of [...pending]) {
     if (openDays.length === 0) break;
-    const preferred = session.taxesLegs
-      ? openDays.find((d) => !adjacentTo(keyRunDates, d) && !adjacentTo(hardDates, d)) ??
-        openDays.find((d) => !adjacentTo(keyRunDates, d))
-      : undefined;
-    const date = preferred ?? openDays[0];
-    take(date, session);
-    if (session.taxesLegs) hardDates.add(date);
+    take(openDays[0], session);
     pending.splice(pending.indexOf(session), 1);
   }
 
