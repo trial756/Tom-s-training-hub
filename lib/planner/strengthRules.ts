@@ -32,6 +32,7 @@ interface Context {
 const isLift = (s: PlanSession) => s.kind === "lift" || s.kind === "lift_and_run";
 
 function tier(pattern: Pattern, role: Role | null): number {
+  if (pattern === "power") return -1; // fast work first, while fresh
   if (pattern === "mobility") return 4;
   if (pattern === "core") return 3;
   if (COMPOUND.has(pattern)) return role === "heavy" ? 0 : 1;

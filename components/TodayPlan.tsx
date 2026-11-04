@@ -215,6 +215,12 @@ export default function TodayPlan({
               )}
             </div>
             {run.structure && <p className="mt-1 text-xs leading-snug text-muted">{run.structure}</p>}
+            {run.hrCap && (
+              <p className="mt-1 text-[11px] text-faint">
+                Keep heart rate under {run.hrCap} — slow down or walk the hills to stay there
+                {run.type === "Long" ? " (except any marathon-pace finish)" : ""}.
+              </p>
+            )}
             {run.easyPace && (
               <p className="mt-1 text-[11px] text-faint">
                 Warm-up, cool-down and recoveries at {formatPaceRange(run.easyPace)}/mi

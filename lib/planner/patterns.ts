@@ -23,11 +23,14 @@ export type Pattern =
   | "calf"
   | "core"
   | "mobility"
+  | "power"
   | "other";
 
-export type Family = "push" | "pull" | "legs" | "arms" | "shoulders" | "core" | "mobility" | "other";
+export type Family = "push" | "pull" | "legs" | "arms" | "shoulders" | "core" | "mobility" | "power" | "other";
 
 const RULES: [RegExp, Pattern][] = [
+  // Jumps, sprints, throws and strides: fast, low-rep, done fresh.
+  [/jump|pogo|\bhops?\b|bound|sprint|strides?\b|med(icine)? ball|ball slam|throw|shuttle|agility|ladder drill|skater/, "power"],
   [/stretch|cat.?cow|90\/90|pigeon|leg swing|a.?skip|walk(ing)?$|^walk|mobility|foam|yoga|world.?s greatest/, "mobility"],
   [/pallof|plank|dead ?bug|crunch|sit.?up|hollow|bird ?dog|ab wheel|leg raise|copenhagen|carry|suitcase|russian twist/, "core"],
   [/calf/, "calf"],
@@ -67,6 +70,7 @@ const FAMILY: Record<Pattern, Family> = {
   calf: "legs",
   core: "core",
   mobility: "mobility",
+  power: "power",
   other: "other",
 };
 
@@ -106,5 +110,6 @@ export const PATTERN_LABEL: Record<Pattern, string> = {
   calf: "calf",
   core: "core",
   mobility: "mobility",
+  power: "power / speed",
   other: "other",
 };

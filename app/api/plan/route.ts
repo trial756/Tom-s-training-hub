@@ -9,6 +9,7 @@ import { scheduleWeek, type DayLog } from "@/lib/planner/schedule";
 import { fitWeekToTargets, reconcileMileage } from "@/lib/planner/mileage";
 import { liftTrends } from "@/lib/planner/progression";
 import { applyStrengthRules } from "@/lib/planner/strengthRules";
+import { fillGaps } from "@/lib/planner/gaps";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
 import { buildMarathonPlan, currentWeek } from "@/lib/marathonPlan";
 import { RUN_TYPES, type RunType } from "@/lib/types";
@@ -202,12 +203,21 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
       // Structure, loads, stall breakers and "new" tags are rules, not model output.
       const sessions = [
         ...kept,
-        ...applyStrengthRules(fitted, {
+        ...applyStrengthRules(
+          // Weekly floors for legs, power, mobility and hips (lib/planner/gaps.ts).
+          fillGaps(fitted, {
+            mode: context.strengthDose.mode,
+            daysToRace: context.marathon?.daysToRace ?? null,
+            recoveryWeek: !!context.marathon?.isRecoveryWeek,
+            alreadyThisWeek: kept,
+          }),
+          {
           trends: liftTrends(workouts, today),
           knownNames: await loggedExerciseNames(),
           fatigued: context.fatigued,
           alreadyThisWeek: kept,
-        }),
+          }
+        ),
       ];
       const row = {
         week_start: week,
