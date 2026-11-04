@@ -189,3 +189,16 @@ alter table sync_state enable row level security;
 -- Garmin runs awaiting confirmation in the app ('pending'); null once confirmed.
 alter table runs add column if not exists review_status text;
 create index if not exists runs_review_pending_idx on runs (logged_at) where review_status = 'pending';
+
+-- Garmin daily wellness (Body Battery, HRV), synced by lib/garminWellness.ts.
+create table if not exists public.garmin_daily (
+  day date primary key,
+  bb_charged integer,
+  bb_drained integer,
+  bb_high integer,
+  bb_low integer,
+  hrv_last_night integer,
+  hrv_weekly_avg integer,
+  updated_at timestamptz not null default now()
+);
+alter table public.garmin_daily enable row level security;

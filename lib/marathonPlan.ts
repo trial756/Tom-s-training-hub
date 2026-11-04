@@ -7,7 +7,7 @@ import { localDateKey, startOfWeekSunday } from "@/lib/format";
 export const RACE_DATE = "2026-12-13";
 export const GOAL_TIME = "3:30:00";
 export const GOAL_PACE_SECONDS_PER_MILE = 8 * 60 + 1; // 8:01/mi
-export const BODYWEIGHT_LB = 160;
+export const BODYWEIGHT_LB = 158;
 
 export type PlanPhase = "Base Building" | "Stamina" | "Peak" | "Taper";
 

@@ -22,12 +22,24 @@ export async function GET() {
   const d = localDateKey(new Date(today.getTime() - 86400000)); // yesterday: a complete day
   const weekAgo = localDateKey(new Date(today.getTime() - 7 * 86400000));
 
+  // The display name some endpoints need; try the profile paths in turn.
   let displayName: string | null = null;
-  try {
-    const profile = (await garminGet("/userprofile-service/socialProfile")) as { displayName?: string } | null;
-    displayName = profile?.displayName ?? null;
-  } catch {
-    /* some endpoints need it; they'll report their own failure */
+  for (const path of [
+    "/userprofile-service/socialProfile",
+    "/userprofile-service/userprofile/personal-information",
+    "/userprofile-service/userprofile/settings",
+    "/userprofile-service/userprofile/user-settings",
+  ]) {
+    try {
+      const p = (await garminGet(path)) as Record<string, unknown> | null;
+      const name = p?.displayName ?? p?.userName ?? (p?.userInfo as Record<string, unknown> | undefined)?.displayName;
+      if (typeof name === "string" && name) {
+        displayName = name;
+        break;
+      }
+    } catch {
+      /* next */
+    }
   }
   const who = displayName ?? "_";
 
@@ -48,6 +60,22 @@ export async function GET() {
     weight: `/weight-service/weight/dateRange?startDate=${weekAgo}&endDate=${d}`,
     personalRecords: `/personalrecord-service/personalrecord/prs/${who}`,
     lactateThreshold: `/biometric-service/biometric/latestLactateThreshold`,
+    // Second round (Nov 2026): the same data by paths that don't need the display name.
+    profileSettings: "/userprofile-service/userprofile/user-settings",
+    personalInfo: "/userprofile-service/userprofile/personal-information",
+    dailySummaryNoName: `/usersummary-service/usersummary/daily?calendarDate=${d}`,
+    sleepNoName: `/wellness-service/wellness/dailySleepData?date=${d}&nonSleepBufferMinutes=60`,
+    sleepService: `/sleep-service/sleep/dailySleepData?date=${d}`,
+    sleepStats: `/sleep-service/stats/sleep/daily/${weekAgo}/${d}`,
+    restingHrNoName: `/userstats-service/wellness/daily?fromDate=${weekAgo}&untilDate=${d}&metricId=60`,
+    heartRateNoName: `/wellness-service/wellness/dailyHeartRate?date=${d}`,
+    hrvRange: `/hrv-service/hrv/daily/${weekAgo}/${d}`,
+    stressRange: `/usersummary-service/stats/stress/daily/${weekAgo}/${d}`,
+    vo2maxLatest: `/metrics-service/metrics/maxmet/latest/${d}`,
+    weightRange: `/weight-service/weight/range/${weekAgo}/${d}?includeAll=true`,
+    weightDay: `/weight-service/weight/dayview/${d}`,
+    trainingStatusDaily: `/metrics-service/metrics/trainingstatus/daily/${d}`,
+    racePredictionsNoName: `/metrics-service/metrics/racepredictions/latest`,
   };
 
   const results: Record<string, { ok: boolean; status: number | null; fields?: string[]; empty?: boolean }> = {};
