@@ -39,7 +39,15 @@ export interface PlannedRun {
   structure: string | null;
   /** True when the run is one steady effort, so its target is also its average pace. */
   steady: boolean;
+  /** Heart-rate ceiling for easy and long runs — pace is a guide, this is the rule. */
+  hrCap: number | null;
 }
+
+// From a highest recorded heart rate of 185 (Garmin, Jul–Oct 2026): easy
+// running stays under ~80% of max, long runs a little higher. Through Oct
+// 2026 almost all "easy" minutes were in Garmin zones 3–5.
+export const EASY_HR_CAP = 148;
+export const LONG_HR_CAP = 155;
 
 const RUN_TYPE_SET = new Set<string>(["Easy", "Long", "Tempo", "Marathon Pace", "Interval", "Race", "Other"]);
 
@@ -77,6 +85,7 @@ export function plannedRunFor(session: PlanSession): PlannedRun | null {
     easyPace: type === "Easy" || type === "Long" || steady ? null : EASY,
     structure,
     steady,
+    hrCap: type === "Easy" ? EASY_HR_CAP : type === "Long" ? LONG_HR_CAP : null,
   };
 }
 
