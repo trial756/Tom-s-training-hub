@@ -314,7 +314,10 @@ export default function MarathonPage() {
               {RACE_DAY_PLAN.map((r) => (
                 <tr key={r.segment} className="border-t border-base-800 first:border-t-0">
                   <td className="w-24 px-3 py-2.5 font-semibold text-accent">{r.segment}</td>
-                  <td className="px-3 py-2.5 text-gray-300">{r.plan}</td>
+                  <td className="px-3 py-2.5 text-gray-300">
+                    {r.plan}
+                    <p className="mt-1 text-[11px] leading-snug text-muted">{r.course}</p>
+                  </td>
                 </tr>
               ))}
             </tbody>

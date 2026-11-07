@@ -207,12 +207,42 @@ export const PACE_TARGETS: PaceTarget[] = [
   { zone: "Strides", pace: "6:30–7:00/mi", purpose: "2–3× weekly" },
 ];
 
-export const RACE_DAY_PLAN: { segment: string; plan: string }[] = [
-  { segment: "Mi 1–6", plan: "Conservative, 8:10–8:15/mi" },
-  { segment: "Mi 7–13", plan: "Settle into 8:01 goal pace" },
-  { segment: "Mi 14–18", plan: "Discipline — check in every 2mi, fuel every 45min" },
-  { segment: "Mi 19–22", plan: "“The race begins” — shorten stride if things get tight" },
-  { segment: "Mi 23–26.2", plan: "Dig in, pick it up if possible" },
+/**
+ * Pacing by segment, with what the BMW Dallas Marathon course does there
+ * (official course map, Nov 2026). Hill notes are from the map and local
+ * knowledge, not the official elevation profile; check it when posted.
+ */
+export const RACE_DAY_PLAN: { segment: string; plan: string; course: string }[] = [
+  {
+    segment: "Mi 1–6",
+    plan: "Conservative, 8:10–8:15/mi",
+    course:
+      "Downtown start → I-35/Commerce → Turtle Creek Blvd → Highland Park. Flat start in the half-marathon crowd; Turtle Creek drifts gently up. Don't chase the half runners.",
+  },
+  {
+    segment: "Mi 7–13",
+    plan: "Settle into 8:01 goal pace",
+    course:
+      "Short climb over US-75 at Airline (~mi 7) → Greenville Ave → the half splits off ~mi 9 and the field thins, so find a group → Lakewood/Tokalon rollers (~mi 10) → White Rock Lake at 11.",
+  },
+  {
+    segment: "Mi 14–18",
+    plan: "Discipline — check in every 2mi, fuel every 45min",
+    course:
+      "White Rock Lake loop: Mockingbird Ln (14), Scout Hill, east shore on E Lawther (16–18). Flat but open and often windy; tuck in behind runners. Gels around mi 12 and 18.",
+  },
+  {
+    segment: "Mi 19–22",
+    plan: "“The race begins” — shorten stride if things get tight",
+    course:
+      "Lake trail (19) → Winsted Dr hills (20) → Tokalon/Lakewood back to Skillman (21–22). The hardest climbs of the day: run them by effort, give back 10–20 s per hill, don't chase it.",
+  },
+  {
+    segment: "Mi 23–26.2",
+    plan: "Dig in, pick it up if possible",
+    course:
+      "Swiss Ave → Gaston → Deep Ellum → Main/Canton to the downtown finish. Gently downhill overall, where time comes back; short overpass rises in the last 2 mi feel bigger than they are.",
+  },
 ];
 
 export const FUELING_STRATEGY: { when: string; plan: string }[] = [

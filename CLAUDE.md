@@ -128,11 +128,14 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 *(Full week-by-week mileage/long-run/focus-text data for all 27 weeks exists in the current artifact code — pull directly from the `PLAN_PHASES` constant rather than retyping; it's the same array used to drive the countdown, current-week detection, and expandable plan UI.)*
 
 ## Race Day Game Plan
-- Mi 1–6: Conservative, 8:10–8:15/mi
-- Mi 7–13: Settle into 8:01 goal pace
-- Mi 14–18: Discipline, check in every 2mi, fuel every 45min
-- Mi 19–22: "The race begins," shorten stride if tight
-- Mi 23–26.2: Dig in, pick it up if possible
+Each segment shows the pacing plus what the BMW Dallas Marathon course does there (`RACE_DAY_PLAN` in `lib/marathonPlan.ts`, from the official course map, Nov 2026; hill notes not yet checked against the official elevation profile).
+- Mi 1–6: Conservative, 8:10–8:15/mi — downtown → Turtle Creek → Highland Park; flat start in the half-marathon crowd
+- Mi 7–13: Settle into 8:01 goal pace — climb over US-75 (~7), Greenville Ave, half splits off ~9, Lakewood rollers (~10), White Rock Lake at 11
+- Mi 14–18: Discipline, check in every 2mi, fuel every 45min — White Rock Lake loop; flat, exposed, often windy
+- Mi 19–22: "The race begins," shorten stride if tight — Winsted Dr hills (~20), Tokalon/Lakewood back to Skillman; run by effort
+- Mi 23–26.2: Dig in, pick it up if possible — Swiss Ave, Gaston, Deep Ellum to the downtown finish; gently downhill, short overpass rises late
+
+The course averages roughly 20–27 ft of climb per mile vs 33–60 ft/mi on Tom's Tyler (Smith County) long-run routes; Dallas's climbing is bunched (US-75 overpass, Lakewood, Winsted at mi 20, late overpasses), Tyler's is spread out.
 
 ## Fueling Strategy
 - Pre-race (2hr out): 200–300 cal familiar food
