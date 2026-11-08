@@ -52,7 +52,8 @@ export default function GarminSync() {
     let cancelled = false;
 
     const sync = async () => {
-      if (running) return;
+      // Nothing to sync for a device that isn't signed in yet.
+      if (running || window.location.pathname === "/login") return;
       running = true;
       try {
         for (let i = 0; i < 40 && !cancelled; i++) {

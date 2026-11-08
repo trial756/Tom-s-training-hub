@@ -2,7 +2,7 @@
 
 This app is being migrated from a Claude.ai artifact (React + local key-value storage) to a real hosted app: **React + Tailwind + Supabase (Postgres) + Vercel**. This document captures everything the artifact version already does, so the rebuild matches it feature-for-feature before extending further.
 
-**Supabase project ID:** `yqprtirfgtdxdmkktoya` — tables already created: `workouts`, `runs`, `meals`, `favorites` (plus `exercise_muscles`, `week_plans`, `sync_state`, `garmin_daily`) (RLS on, zero public policies — app talks to Supabase via service-role key server-side only).
+**Supabase project ID:** `yqprtirfgtdxdmkktoya` — tables already created: `workouts`, `runs`, `meals`, `favorites` (plus `exercise_muscles`, `week_plans`, `sync_state`, `garmin_daily`, `trusted_devices`) (RLS on, zero public policies — app talks to Supabase via service-role key server-side only).
 
 ---
 
@@ -40,6 +40,9 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 **week_plans**: week_start (Sunday, PK), plan_week, phase, headline, sessions[] (what the week should contain), assignments{sessionId: date} (where each currently sits), context (the facts packet it was generated from)
 
 ---
+
+## Sign-in (trusted devices)
+One person's app, so no accounts: `middleware.ts` + `lib/deviceAuth.ts`. A passcode (`APP_PASSCODE`, Vercel env) signs a device in once at `/login`; "Trust this device" (default) sets a signed, httpOnly cookie good for ~400 days and re-signed as it's used, so a phone in daily use never signs out; unticked, it's a 12-hour browser session. Each device is a `trusted_devices` row, listed at `/devices` (linked from Today) where any device can be signed out; revocation reaches the middleware within ~5 minutes. Every page and API route needs a device except `/login`, `/api/auth/login`, the manifest, and the daily Garmin cron (`CRON_SECRET` bearer if set, else Vercel's cron user agent; that route only imports and returns counts). Five wrong passcodes in 15 minutes locks sign-in for 15 minutes. The cookie is signed with a key derived from `SESSION_SECRET`, else the service-role key. With no `APP_PASSCODE` set, the app is open, as before, and `/devices` says so.
 
 ## Tabs & Features
 

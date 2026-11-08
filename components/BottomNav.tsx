@@ -14,6 +14,7 @@ const TABS = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  if (pathname === "/login") return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-base-700 bg-base-950/95 backdrop-blur">
