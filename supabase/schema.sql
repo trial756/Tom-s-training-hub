@@ -202,3 +202,14 @@ create table if not exists public.garmin_daily (
   updated_at timestamptz not null default now()
 );
 alter table public.garmin_daily enable row level security;
+
+-- Devices signed in to the app (lib/deviceAuth.ts). A revoked device is signed out on its next request.
+create table if not exists public.trusted_devices (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  trusted boolean not null default true,
+  created_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  revoked_at timestamptz
+);
+alter table public.trusted_devices enable row level security;

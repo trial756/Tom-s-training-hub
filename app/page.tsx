@@ -655,6 +655,9 @@ export default function StatsPage() {
       </div>
 
       <div className="mt-6 px-4">
+        <Link href="/devices" className="mb-4 flex min-h-[44px] items-center text-sm font-semibold uppercase tracking-wide text-gray-500">
+          Signed-in devices →
+        </Link>
         <button
           onClick={() => setBackupOpen((v) => !v)}
           className="text-sm font-semibold uppercase tracking-wide text-gray-500"
