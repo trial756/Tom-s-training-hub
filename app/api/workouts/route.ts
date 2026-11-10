@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { parseWorkoutEntry } from "@/lib/anthropic";
+import { canonicalExerciseName } from "@/lib/exerciseNames";
+import type { Exercise } from "@/lib/types";
 import { buildWorkoutHistoryContext, recordExerciseMuscles } from "@/lib/workoutLog";
 
 export const runtime = "nodejs";
@@ -19,6 +21,23 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ workouts: data });
 }
 
+function exactExercises(raw: unknown): Exercise[] | null {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 40) return null;
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 2000 ? v : null);
+  const out: Exercise[] = [];
+  for (const e of raw as { name?: unknown; sets?: unknown }[]) {
+    if (typeof e?.name !== "string" || !e.name.trim() || !Array.isArray(e.sets)) return null;
+    out.push({
+      name: canonicalExerciseName(e.name.trim().slice(0, 80)),
+      sets: (e.sets as { reps?: unknown; weight?: unknown }[]).slice(0, 30).map((st) => {
+        const weight = n(st?.weight);
+        return { reps: n(st?.reps), weight, weight_unit: weight ? "lb" : null };
+      }),
+    });
+  }
+  return out;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -33,14 +52,21 @@ export async function POST(req: NextRequest) {
     // Muscle tags live in the exercise_muscles lookup, not on the workout
     // row — storing them per session would let the same movement drift into
     // disagreeing tags across entries.
-    const exercises = (parsed.exercises ?? []).map((ex) => ({ name: ex.name, sets: ex.sets }));
+    // Workout mode sends the ticked sets exactly; they're stored as-is (under
+    // the standard lift names) rather than re-read from the text.
+    const exact = exactExercises(body.exercises);
+    const exercises = exact ?? (parsed.exercises ?? []).map((ex) => ({ name: ex.name, sets: ex.sets }));
+    const duration =
+      typeof body.duration_minutes === "number" && body.duration_minutes > 0 && body.duration_minutes < 600
+        ? Math.round(body.duration_minutes)
+        : parsed.duration_minutes;
 
     const { data, error } = await supabaseAdmin()
       .from("workouts")
       .insert({
         raw_text: text,
         exercises,
-        duration_minutes: parsed.duration_minutes,
+        duration_minutes: duration,
         notes: parsed.notes,
         coaching_feedback: parsed.coaching_feedback,
         vs_last_time: parsed.vs_last_time,

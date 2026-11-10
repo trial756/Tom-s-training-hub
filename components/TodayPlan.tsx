@@ -2,12 +2,15 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { loadActiveWorkout, saveActiveWorkout, workoutFromSession } from "@/lib/workoutSession";
 import { MUSCLE_LABELS, type MuscleRegion } from "@/lib/muscles";
 import type { PlanDay, PlanSession, WeekPlan } from "@/lib/planner/types";
 import {
   formatPaceRange,
   liftPrefill,
   liftRegionsFor,
+  liftTitleFor,
   plannedRunFor,
   runPrefillQuery,
 } from "@/lib/planner/runPlan";
@@ -271,6 +274,10 @@ export default function TodayPlan({
           </ul>
         )}
 
+        {canLog && isToday && session.exercises.length > 0 && !selected?.loggedLift && (
+          <StartWorkoutButton session={session} date={selected.date} />
+        )}
+
         {canLog && (run || session.exercises.length > 0) && (
           <div className="mt-3 flex gap-2">
             {run && (
@@ -312,6 +319,26 @@ export default function TodayPlan({
 export type { PlanDay };
 
 /** One half of a day's session — a ✓ once that half is logged, so the other stays reachable. */
+/** Opens workout mode with today's exercises, or the workout already under way. */
+function StartWorkoutButton({ session, date }: { session: PlanSession; date: string }) {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      className="btn-primary mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 text-sm"
+      onClick={() => {
+        if (!loadActiveWorkout()) saveActiveWorkout(workoutFromSession(session, date, liftTitleFor(session)));
+        router.push("/workout");
+      }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M7 4.5v15l12-7.5-12-7.5Z" />
+      </svg>
+      Start workout
+    </button>
+  );
+}
+
 function LogButton({ href, done, label, primary }: { href: string; done: boolean; label: string; primary: boolean }) {
   if (done) {
     return (
