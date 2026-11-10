@@ -1,4 +1,5 @@
 import { daysBetweenKeys, localDateKey, normalizeExerciseName } from "@/lib/format";
+import { exerciseKeyFromStoredKey } from "@/lib/exerciseNames";
 import { COARSE_TO_REGIONS, MUSCLE_REGIONS, RUN_REGIONS, type MuscleRegion } from "@/lib/muscles";
 
 export interface ExerciseLookupEntry {
@@ -42,10 +43,15 @@ export function buildExerciseLookup(
 ): ExerciseLookup {
   const map: ExerciseLookup = new Map();
   for (const row of rows) {
-    map.set(row.key, {
+    const entry = {
       primary: (Array.isArray(row.primary_muscles) ? row.primary_muscles : []) as MuscleRegion[],
       secondary: (Array.isArray(row.secondary_muscles) ? row.secondary_muscles : []) as MuscleRegion[],
-    });
+    };
+    map.set(row.key, entry);
+    // Rows saved under an older key or an alias are found under the lift's
+    // standard key too; a row saved under the standard key itself wins.
+    const key = exerciseKeyFromStoredKey(row.key);
+    if (key !== row.key && !map.has(key)) map.set(key, entry);
   }
   return map;
 }

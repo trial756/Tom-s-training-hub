@@ -1,3 +1,4 @@
+import { EXERCISE_ALIASES, canonicalExerciseName } from "@/lib/exerciseNames";
 import Anthropic from "@anthropic-ai/sdk";
 import { APP_TIMEZONE, formatDuration, formatPace } from "@/lib/format";
 import { describeIntervals } from "@/lib/intervals";
@@ -247,7 +248,7 @@ const workoutSchema = {
 };
 
 export async function parseWorkoutEntry(text: string, historyContext: string): Promise<ParsedWorkout> {
-  return parseWithTool<ParsedWorkout>({
+  const parsed = await parseWithTool<ParsedWorkout>({
     system:
       "You are a strength-training coach parsing a natural-language workout log into structured data. " +
       "Extract every exercise, set, rep count, and weight mentioned. If units are ambiguous, assume lb. " +
@@ -259,7 +260,12 @@ export async function parseWorkoutEntry(text: string, historyContext: string): P
       "otherwise use the best muscle-group match. Name the specific exercise you're comparing, cite specific " +
       "numbers (weight/reps/volume) from both sessions, state how many days ago that prior session was, and give a " +
       "clear conclusion (improved, consistent, or regressed). If nothing in the history shares a muscle group, " +
-      "vs_last_time is null.\n\n" + todayContext(),
+      "vs_last_time is null.\n\n" +
+      "Name each exercise the way the athlete has logged it before, so its history stays in one place. These are " +
+      `the standard names for lifts that have been logged under several: ${Object.keys(EXERCISE_ALIASES).join("; ")}. ` +
+      "Use one of them when it's the same movement and equipment; keep a different grip, implement or one-arm " +
+      "version as its own name.\n\n" +
+      todayContext(),
     userText:
       `New workout entry to parse:\n"${text}"\n\n` +
       `Recent workout history for comparison (most recent first):\n${historyContext || "No prior workouts logged yet."}`,
@@ -267,6 +273,8 @@ export async function parseWorkoutEntry(text: string, historyContext: string): P
     toolDescription: "Records a structured, parsed weightlifting/strength workout with 3-part coaching feedback.",
     inputSchema: workoutSchema,
   });
+  // Known aliases are saved under the lift's standard name, whatever the model wrote.
+  return { ...parsed, exercises: (parsed.exercises ?? []).map((ex) => ({ ...ex, name: canonicalExerciseName(ex.name) })) };
 }
 
 // ── Runs ────────────────────────────────────────────────────────────────
