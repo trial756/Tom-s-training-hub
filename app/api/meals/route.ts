@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { parseMealEntry } from "@/lib/anthropic";
+import { reconcileItems } from "@/lib/mealItems";
+import { buildMealDayContext } from "@/lib/mealContext";
 import { existingByClientId, isDuplicate, readClientId } from "@/lib/clientId";
 import { normalizeMealKey } from "@/lib/mealFavorites";
 
@@ -82,10 +84,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Describe the meal or add a photo." }, { status: 400 });
     }
 
-    const parsed = await parseMealEntry(text, image.image ?? undefined);
-    // A photo-only meal is stored under what Claude saw, so it reads well in
-    // lists and can be starred and re-logged as text later.
-    const rawText = text || parsed.summary;
+    const loggedAt: string = typeof body.logged_at === "string" ? body.logged_at : new Date().toISOString();
+    // The day so far, so feedback treats this meal as part of the day.
+    const dayContext = await buildMealDayContext(loggedAt);
+    const parsed = reconcileItems(await parseMealEntry(text, image.image ?? undefined, dayContext));
+    // A photo meal is stored under what Claude saw (the typed text is usually
+    // a correction like "ate half", not a name), so it reads well in lists
+    // and can be starred and re-logged as text later.
+    const rawText = image.image ? parsed.summary || text : text;
 
     const { data, error } = await supabaseAdmin()
       .from("meals")
@@ -101,7 +107,7 @@ export async function POST(req: NextRequest) {
         notes: parsed.notes,
         coaching_feedback: parsed.coaching_feedback,
         summary: parsed.summary,
-        logged_at: body.logged_at ?? new Date().toISOString(),
+        logged_at: loggedAt,
       })
       .select()
       .single();
