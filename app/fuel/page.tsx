@@ -39,6 +39,9 @@ export default function FuelPage() {
   // A meal photo, already shrunk on the phone; only sent, never stored.
   const [photo, setPhoto] = useState<{ dataUrl: string; base64: string } | null>(null);
   const [readingPhoto, setReadingPhoto] = useState(false);
+  // Two inputs: Android opens the gallery for a plain image picker, so the
+  // camera needs its own input with `capture`.
+  const cameraInput = useRef<HTMLInputElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -230,6 +233,7 @@ export default function FuelPage() {
           disabled={submitting}
         />
 
+        <input ref={cameraInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={pickPhoto} />
         <input ref={photoInput} type="file" accept="image/*" className="hidden" onChange={pickPhoto} />
         {photo ? (
           <div className="relative mb-3 overflow-hidden rounded-xl border border-base-700">
@@ -246,18 +250,33 @@ export default function FuelPage() {
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => photoInput.current?.click()}
-            disabled={submitting || readingPhoto}
-            className="btn-secondary mb-3 flex min-h-[44px] w-full items-center justify-center gap-2 text-sm"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
-              <circle cx="12" cy="13.5" r="3.5" />
-            </svg>
-            {readingPhoto ? "Reading photo…" : "Snap or choose a photo"}
-          </button>
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => cameraInput.current?.click()}
+              disabled={submitting || readingPhoto}
+              className="btn-secondary flex min-h-[44px] items-center justify-center gap-2 text-sm"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+                <circle cx="12" cy="13.5" r="3.5" />
+              </svg>
+              {readingPhoto ? "Reading…" : "Take photo"}
+            </button>
+            <button
+              type="button"
+              onClick={() => photoInput.current?.click()}
+              disabled={submitting || readingPhoto}
+              className="btn-secondary flex min-h-[44px] items-center justify-center gap-2 text-sm"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <circle cx="9" cy="10" r="1.5" />
+                <path d="m21 16-5-5-9 9" />
+              </svg>
+              Choose photo
+            </button>
+          </div>
         )}
 
         <textarea
