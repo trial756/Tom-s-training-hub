@@ -75,7 +75,7 @@ export default function LogSheet({ onClose }: { onClose: () => void }) {
             <FuelIcon active />
             <span className="flex-1">
               <span className="block text-sm font-semibold text-ink">Meal</span>
-              <span className="block text-xs text-muted">Favorites one tap away</span>
+              <span className="block text-xs text-muted">Type it, snap a photo, or tap a favorite</span>
             </span>
           </Link>
           {weightOpen ? (
