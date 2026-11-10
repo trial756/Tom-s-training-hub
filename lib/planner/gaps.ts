@@ -33,7 +33,9 @@ interface Floor {
 }
 
 /** What each part of the block can absorb. */
-export function floorsFor(mode: Mode, opts: { daysToRace: number | null; recoveryWeek: boolean }): Floor {
+export function floorsFor(mode: Mode, opts: { daysToRace: number | null; recoveryWeek: boolean; afterRace?: boolean }): Floor {
+  // Just raced: the legs are repairing, so only mobility.
+  if (opts.afterRace) return { squat: 0, hinge: 0, calf: 0, hip: 0, power: 0, strides: 0, mobility: 3 };
   if (opts.daysToRace != null && opts.daysToRace <= 10) {
     return { squat: 0, hinge: 0, calf: 0, hip: 0, power: 0, strides: 2, mobility: 3 };
   }
@@ -89,10 +91,10 @@ function tally(sessions: PlanSession[]) {
  */
 export function fillGaps(
   input: PlanSession[],
-  ctx: { mode: Mode; daysToRace: number | null; recoveryWeek: boolean; alreadyThisWeek?: PlanSession[] }
+  ctx: { mode: Mode; daysToRace: number | null; recoveryWeek: boolean; afterRace?: boolean; alreadyThisWeek?: PlanSession[] }
 ): PlanSession[] {
   const sessions = input.map((s) => ({ ...s, exercises: [...s.exercises] }));
-  const floor = floorsFor(ctx.mode, { daysToRace: ctx.daysToRace, recoveryWeek: ctx.recoveryWeek });
+  const floor = floorsFor(ctx.mode, { daysToRace: ctx.daysToRace, recoveryWeek: ctx.recoveryWeek, afterRace: ctx.afterRace });
   const have = tally([...(ctx.alreadyThisWeek ?? []), ...sessions]);
   const build = ctx.mode === "build";
 

@@ -12,10 +12,10 @@ import { applyStrengthRules } from "@/lib/planner/strengthRules";
 import { fillGaps } from "@/lib/planner/gaps";
 import { isHard, validateWeek } from "@/lib/planner/validate";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
-import { buildMarathonPlan, currentWeek } from "@/lib/marathonPlan";
+import { loadGoals } from "@/lib/goalsStore";
+import { blockForWeek } from "@/lib/goals";
 import { RUN_TYPES, type RunType } from "@/lib/types";
 
-const marathonWeeks = buildMarathonPlan();
 
 export const runtime = "nodejs";
 
@@ -126,7 +126,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
 
     const historyStart = shiftDays(today, -HISTORY_DAYS);
 
-    const [workoutsRes, runsRes, lookupRes, storedRes] = await Promise.all([
+    const [workoutsRes, runsRes, lookupRes, storedRes, goals] = await Promise.all([
       db
         .from("workouts")
         .select("logged_at, exercises, muscle_groups, summary")
@@ -139,6 +139,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         .order("logged_at", { ascending: false }),
       db.from("exercise_muscles").select("key, primary_muscles, secondary_muscles"),
       db.from("week_plans").select("week_start, sessions, assignments, headline").in("week_start", stripWeeks),
+      loadGoals(),
     ]);
 
     const err = workoutsRes.error || runsRes.error || lookupRes.error || storedRes.error;
@@ -164,6 +165,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
     const contextFor = (week: string, plannedBeforeWeek?: Parameters<typeof buildPlannerContext>[0]["plannedBeforeWeek"]) =>
       buildPlannerContext({
         workouts,
+        goals,
         runs,
         exerciseMuscles: lookupRes.data ?? [],
         today,
@@ -210,6 +212,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
             mode: context.strengthDose.mode,
             daysToRace: context.marathon?.daysToRace ?? null,
             recoveryWeek: !!context.marathon?.isRecoveryWeek,
+            afterRace: context.block.kind === "recovery",
             alreadyThisWeek: kept,
           }),
           {
@@ -333,13 +336,13 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
 
     for (const week of stripWeeks) {
       const dates = weekDatesFrom(week);
-      const marathon = currentWeek(marathonWeeks, week);
+      const block = blockForWeek(goals, week, todayKey);
       const baseMeta = {
         weekStart: week,
         weekEnd: dates[6],
-        planWeek: marathon?.weekNumber ?? null,
-        phase: marathon?.phase ?? null,
-        weeklyMileage: marathon?.weeklyMileage ?? null,
+        planWeek: block.race?.planWeek ?? null,
+        phase: block.race?.phase ?? (block.kind === "race" ? null : block.summary),
+        weeklyMileage: block.race?.weeklyMileage ?? null,
       };
 
       if (week === weekStart) {
@@ -448,7 +451,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
       weekStart,
       weekEnd,
       planWeek: context.marathon?.planWeek ?? null,
-      phase: context.marathon?.phase ?? null,
+      phase: context.marathon?.phase ?? context.block.summary,
       headline: current.headline ?? "",
       sessions: results.flatMap((r) => r.sessions.map((s) => ({ ...s, id: prefixed(r.meta.weekStart, s.id)! }))),
       days: results

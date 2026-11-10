@@ -213,3 +213,20 @@ create table if not exists public.trusted_devices (
   revoked_at timestamptz
 );
 alter table public.trusted_devices enable row level security;
+
+-- What training is for (lib/goals.ts): races and focus periods.
+create table if not exists public.goals (
+  id text primary key default gen_random_uuid()::text,
+  kind text not null check (kind in ('race', 'focus')),
+  title text not null,
+  date date not null,
+  priority text not null default 'A' check (priority in ('A', 'B', 'C')),
+  distance_mi numeric,
+  target_seconds integer,
+  focus text check (focus in ('athleticism', 'strength', 'hypertrophy', 'endurance', 'general')),
+  notes text,
+  plan_key text,
+  status text not null default 'active' check (status in ('active', 'done', 'dropped')),
+  created_at timestamptz not null default now()
+);
+alter table public.goals enable row level security;

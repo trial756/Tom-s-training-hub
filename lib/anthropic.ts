@@ -733,7 +733,8 @@ export async function generateWeekPlan(contextJson: string): Promise<GeneratedWe
   const liftCount = (p: GeneratedWeekPlan) =>
     (p.sessions ?? []).filter((s) => s.kind === "lift" || s.kind === "lift_and_run").length;
 
-  let plan = await requestWeekPlan(contextJson, dose?.mode === "build", "");
+  const frame = frameFor(context);
+  let plan = await requestWeekPlan(contextJson, frame, "");
   // The week always carries gym work — running owning the legs changes what
   // the lifting is, not whether it happens. One retry with that spelled out.
   // Short by more than one session — the model tends to swap gym days for
@@ -741,7 +742,7 @@ export async function generateWeekPlan(contextJson: string): Promise<GeneratedWe
   if (liftTarget > 0 && liftCount(plan) < liftTarget - 1) {
     plan = await requestWeekPlan(
       contextJson,
-      dose?.mode === "build",
+      frame,
       `\n\nThe week needs ${liftTarget} lift session(s) ('lift' or 'lift_and_run') per the strengthDose, and your ` +
         `last attempt had ${liftCount(plan)}. Turn accessory-only days into real gym sessions — ` +
         `${dose?.guidance ?? "upper body and core away from the key runs"}`
@@ -751,27 +752,56 @@ export async function generateWeekPlan(contextJson: string): Promise<GeneratedWe
   return plan;
 }
 
-const MARATHON_FRAME =
-  "You are a strength and marathon coach planning one training week (Sunday–Saturday) for an athlete training " +
-  "for a 3:30:00 marathon at 8:01/mi goal pace.\n\n" +
-  "The athlete is chasing a fixed race date on an aggressive build, with weekly mileage climbing from a low " +
-  "base. Running is the priority: the long run and any goal-pace or interval work are the sessions that must " +
-  "happen, and everything else arranges itself around them. Lifting serves the running — it makes the athlete " +
-  "durable — and its volume is what yields when the week is tight. Plan the week's runs to reach the mileage " +
-  "target rather than repeating last week's distances: milesThisWeek plus the planned runs should land on " +
-  "the target and never more than about 15% over it, and the long run is exactly marathon.longRunMiles. Code " +
-  "enforces both, trimming easy runs if the week runs over. Marathon-pace work inside a long run stays to " +
-  "the final 3-5 miles in this build; longer goal-pace blocks belong in their own midweek session.\n\n";
+const fmtPace = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
-const BUILD_FRAME =
-  "You are a strength and conditioning coach planning one training week (Sunday–Saturday) for an athlete who " +
-  "has finished their marathon. The focus is now muscle and athleticism: hypertrophy, power, speed, agility " +
-  "and conditioning. Lifting leads; running is conditioning and should never compromise the lifts.\n\n";
+/**
+ * Who the coach is and what the week is for, from the goal behind it
+ * (context.block, lib/goals.ts) rather than a race written into the prompt.
+ */
+function frameFor(context: Partial<PlannerContext>): string {
+  const block = context.block;
+  const g = block?.goal;
+  const lead = "planning one training week (Sunday–Saturday). ";
+  if (block?.kind === "race" && g) {
+    const target = g.goalPace ? ` at ${fmtPace(g.goalPace)}/mi goal pace` : "";
+    return (
+      `You are a strength and running coach ${lead}The athlete is training for ${g.title}, ${g.distanceMi ?? ""} mi on ` +
+      `${g.date}${target}${g.notes ? ` (${g.notes})` : ""}.\n\n` +
+      "Running is the priority: the long run and any goal-pace or interval work are the sessions that must " +
+      "happen, and everything else arranges itself around them. Lifting serves the running — it makes the athlete " +
+      "durable — and its volume is what yields when the week is tight. Plan the week's runs to reach the mileage " +
+      "target rather than repeating last week's distances: milesThisWeek plus the planned runs should land on " +
+      "the target and never more than about 15% over it, and the long run is exactly marathon.longRunMiles " +
+      "(`marathon` holds this race's block, whatever the distance). Code enforces both, trimming easy runs if the " +
+      "week runs over. Goal-pace work inside a long run stays to the final 3-5 miles; longer goal-pace blocks " +
+      "belong in their own midweek session.\n\n"
+    );
+  }
+  if (block?.kind === "recovery" && g) {
+    return (
+      `You are a strength and running coach ${lead}The athlete has just raced ${g.title} (${g.date}). This is ` +
+      "recovery: short easy runs only (no long run, no workouts), light upper-body and core lifting, plenty of " +
+      "mobility. Every day still gets a session, but none should leave soreness.\n\n"
+    );
+  }
+  if (block?.kind === "focus" && g) {
+    return (
+      `You are a strength and conditioning coach ${lead}The athlete's current goal is "${g.title}"` +
+      `${g.notes ? `: ${g.notes}` : "."} Lifting leads; running is conditioning and should never compromise the ` +
+      "lifts. A race in block.upcoming is run for fun: keep the two days before it easy and let it stand in for " +
+      "the week's long run.\n\n"
+    );
+  }
+  return (
+    `You are a strength and conditioning coach ${lead}No specific goal is set: build general fitness, with ` +
+    "balanced strength work, easy aerobic running and some speed and power.\n\n"
+  );
+}
 
-async function requestWeekPlan(contextJson: string, postRace: boolean, extra: string): Promise<GeneratedWeekPlan> {
+async function requestWeekPlan(contextJson: string, frame: string, extra: string): Promise<GeneratedWeekPlan> {
   return parseWithTool<GeneratedWeekPlan>({
     system:
-      (postRace ? BUILD_FRAME : MARATHON_FRAME) +
+      frame +
       "Every day is a training day: no rest days and no blank days. Plan one session for each remaining day " +
       "(planFrom through weekEnd — earlier days, today included once it's logged, are done and only shape the " +
       "rest: build on loggedThisWeek rather than repeating it), " +

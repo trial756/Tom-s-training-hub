@@ -11,23 +11,35 @@ import type { PlannerContext, StrengthDose } from "@/lib/planner/types";
  */
 export function strengthDoseFor(opts: {
   marathon: PlannerContext["marathon"];
-  /** True once race day has passed. */
-  postRace: boolean;
+  /** What the week is for (lib/goals.ts). */
+  block: { kind: PlannerContext["block"]["kind"]; focus: string | null };
   liftDaysPerWeek: number;
 }): StrengthDose {
-  const { marathon, postRace, liftDaysPerWeek } = opts;
+  const { marathon, block, liftDaysPerWeek } = opts;
   const clamp = (min: number, max: number) => Math.min(max, Math.max(min, liftDaysPerWeek));
 
-  if (postRace) {
+  if (block.kind === "recovery") {
+    return {
+      mode: "maintain",
+      liftSessions: clamp(2, 3),
+      heavyLower: 0,
+      guidance:
+        "Recovery after a race: the legs are still repairing. Upper body and core at moderate load, two or three " +
+        "short sessions; legs only as light mobility and activation. Nothing that leaves soreness.",
+    };
+  }
+
+  const buildFocus = block.kind === "focus" && block.focus !== "endurance";
+  if (buildFocus) {
     return {
       mode: "build",
       liftSessions: clamp(4, 5),
       heavyLower: 2,
       guidance:
-        "The marathon is done; the goal is now muscle and athleticism. Run an upper/lower hypertrophy split " +
-        "(6-12 reps, 2-3 reps in reserve, progressive overload) and open lower days with power and speed work " +
-        "(jumps, sprints, agility drills). Running stays in as conditioning — easy runs and the odd interval " +
-        "session — not a build. The Feb 28 half is for fun and gets no dedicated block.",
+        "The current goal is muscle and athleticism. Run an upper/lower hypertrophy split (6-12 reps, 2-3 reps in " +
+        "reserve, progressive overload) and open lower days with power and speed work (jumps, sprints, agility " +
+        "drills). Running stays in as conditioning — easy runs and the odd interval session — not a build. A race " +
+        "listed in block.upcoming is run for fun: ease off the two days before it and count it as the week's long run.",
     };
   }
 
