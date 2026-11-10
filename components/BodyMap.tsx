@@ -375,7 +375,7 @@ function shadesFor(source: "lift" | "run", intensity: number) {
 }
 
 /** Slate "sculpture" tones for anything without load. */
-const SLATE = { core: "#4a4f55", base: "#363a3f", edge: "#22252a", stroke: "#50555b", fiber: "rgba(255, 255, 255, 0.11)" };
+const SLATE = { core: "#5b6067", base: "#3e4248", edge: "#24272b", stroke: "#15171a", fiber: "rgba(255, 255, 255, 0.12)" };
 
 function Figure({
   parts,
@@ -411,7 +411,7 @@ function Figure({
     fiberColor: string
   ) => (
     <>
-      <path d={m.d} fill={fill} stroke={stroke} strokeWidth={strokeWidth} strokeLinejoin="round" />
+      <path d={m.d} fill={fill} />
       {(m.fibers?.length || m.cuts?.length) && (
         <g clipPath={`url(#${clipId})`} fill="none" strokeLinecap="round" pointerEvents="none">
           {m.fibers?.flatMap(fiberPaths).map((p, i) => (
@@ -422,6 +422,9 @@ function Figure({
           ))}
         </g>
       )}
+      {/* Light from above-left: a soft highlight and a shaded far edge make each belly read as rounded. */}
+      <path d={m.d} fill={`url(#${id("sheen")})`} pointerEvents="none" />
+      <path d={m.d} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinejoin="round" />
     </>
   );
 
@@ -430,9 +433,11 @@ function Figure({
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`${label} muscle map`}>
         <defs>
           <linearGradient id={id("body")} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="#1c1e21" />
-            <stop offset="0.5" stopColor="#2c2f33" />
-            <stop offset="1" stopColor="#1c1e21" />
+            <stop offset="0" stopColor="#1a1c1f" />
+            <stop offset="0.12" stopColor="#262a2e" />
+            <stop offset="0.5" stopColor="#30343a" />
+            <stop offset="0.88" stopColor="#262a2e" />
+            <stop offset="1" stopColor="#1a1c1f" />
           </linearGradient>
           <clipPath id={id("silhouette")}>
             <path d={SILHOUETTE_FILL} />
@@ -445,6 +450,23 @@ function Figure({
             <stop offset="0" stopColor="#40444a" />
             <stop offset="1" stopColor="#202327" />
           </radialGradient>
+          <radialGradient id={id("sheen")} cx="0.34" cy="0.22" r="0.95">
+            <stop offset="0" stopColor="#ffffff" stopOpacity="0.2" />
+            <stop offset="0.38" stopColor="#ffffff" stopOpacity="0.04" />
+            <stop offset="0.7" stopColor="#000000" stopOpacity="0" />
+            <stop offset="1" stopColor="#000000" stopOpacity="0.38" />
+          </radialGradient>
+          <radialGradient id={id("ground")} cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#000000" stopOpacity="0.55" />
+            <stop offset="1" stopColor="#000000" stopOpacity="0" />
+          </radialGradient>
+          <filter id={id("glow")} x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="2.2" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
           {/* Lit from above-left, like the sculpted reference. */}
           <radialGradient id={id("slate")} cx="0.4" cy="0.3" r="0.8">
             <stop offset="0" stopColor={SLATE.core} />
@@ -478,6 +500,9 @@ function Figure({
           ))}
         </defs>
 
+        {/* A soft shadow underfoot so the figure stands rather than floats. */}
+        <ellipse cx={W / 2} cy={H - 5} rx={34} ry={4} fill={`url(#${id("ground")})`} pointerEvents="none" />
+
         {/* silhouette */}
         <g fill={`url(#${id("body")})`}>
           <path d={SILHOUETTE_FILL} />
@@ -489,13 +514,17 @@ function Figure({
           <path d={HEAD} />
           <path d={HEAD} transform={MIRROR} />
         </g>
+        <g fill={`url(#${id("sheen")})`} pointerEvents="none">
+          <path d={HEAD} />
+          <path d={HEAD} transform={MIRROR} />
+        </g>
 
         {/* Supporting anatomy: always slate, never tappable. */}
         <g pointerEvents="none" opacity={selected ? 0.5 : 1} style={{ transition: "opacity 200ms" }}>
           {halves.map((transform, h) => (
             <g key={h} transform={transform}>
               {extras.map((m, i) => (
-                <g key={i}>{renderMuscle(m, id(`clip-extra-${i}`), `url(#${id("slate")})`, SLATE.stroke, 0.4, SLATE.fiber)}</g>
+                <g key={i}>{renderMuscle(m, id(`clip-extra-${i}`), `url(#${id("slate")})`, SLATE.stroke, 0.6, SLATE.fiber)}</g>
               ))}
             </g>
           ))}
@@ -532,7 +561,8 @@ function Figure({
           const isSelected = selected === region;
           const dimmed = selected != null && !isSelected;
           const fill = trained ? `url(#${id(`fill-${region}`)})` : `url(#${id("slate")})`;
-          const stroke = isSelected ? "#f5f5f5" : trained ? css(s!.line, 0.55) : SLATE.stroke;
+          // Dark grooves between bellies, as on a sculpture; the selected muscle gets a lit outline.
+          const stroke = isSelected ? "#f5f5f5" : trained ? css(mix(s!.edge, [0, 0, 0], 0.5), 0.9) : SLATE.stroke;
           const fiber = trained ? css(s!.line, 0.45) : SLATE.fiber;
 
           return (
@@ -541,6 +571,7 @@ function Figure({
               role="button"
               aria-label={d?.label ?? region}
               onClick={() => onPick(region)}
+              filter={isSelected ? `url(#${id("glow")})` : undefined}
               style={{ cursor: "pointer", opacity: dimmed ? 0.4 : 1, transition: "opacity 200ms" }}
             >
               {halves.map((transform, h) => (
@@ -551,7 +582,7 @@ function Figure({
                     <path key={`hit${i}`} d={m.d} fill="none" stroke="transparent" strokeWidth="7" pointerEvents="stroke" />
                   ))}
                   {muscles.map((m, i) => (
-                    <g key={i}>{renderMuscle(m, id(`clip-${region}-${i}`), fill, stroke, isSelected ? 1.6 : 0.5, fiber)}</g>
+                    <g key={i}>{renderMuscle(m, id(`clip-${region}-${i}`), fill, stroke, isSelected ? 1.4 : 0.7, fiber)}</g>
                   ))}
                 </g>
               ))}
@@ -634,7 +665,7 @@ function BodyMap({
           </span>
         ))}
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-sm border border-[#50555b] bg-[#363a3f]" /> untrained
+          <span className="h-2 w-2 rounded-sm border border-[#15171a] bg-[#4a4e54]" /> untrained
         </span>
       </div>
 
