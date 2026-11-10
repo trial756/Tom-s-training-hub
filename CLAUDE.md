@@ -50,9 +50,11 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 ---
 
 ## Sign-in (trusted devices)
-One person's app, so no accounts: `middleware.ts` + `lib/deviceAuth.ts`. A passcode (`APP_PASSCODE`, Vercel env) signs a device in once at `/login`; "Trust this device" (default) sets a signed, httpOnly cookie good for ~400 days and re-signed as it's used, so a phone in daily use never signs out; unticked, it's a 12-hour browser session. Each device is a `trusted_devices` row, listed at `/devices` (linked from Today) where any device can be signed out; revocation reaches the middleware within ~5 minutes. Every page and API route needs a device except `/login`, `/api/auth/login`, the manifest, and the daily Garmin cron (`CRON_SECRET` bearer if set, else Vercel's cron user agent; that route only imports and returns counts). Five wrong passcodes in 15 minutes locks sign-in for 15 minutes. The cookie is signed with a key derived from `SESSION_SECRET`, else the service-role key. With no `APP_PASSCODE` set, the app is open, as before, and `/devices` says so. `components/AuthGuard.tsx` sends the browser to `/login` whenever our own API answers 401, since a page shown from the browser's cache (restored tab, back/forward) never reaches the middleware's redirect.
+One person's app, so no accounts: `middleware.ts` + `lib/deviceAuth.ts`. A passcode (`APP_PASSCODE`, Vercel env) signs a device in once at `/login`; "Trust this device" (default) sets a signed, httpOnly cookie good for ~400 days and re-signed as it's used, so a phone in daily use never signs out; unticked, it's a 12-hour browser session. Each device is a `trusted_devices` row, listed at `/devices` (linked from Progress) where any device can be signed out; revocation reaches the middleware within ~5 minutes. Every page and API route needs a device except `/login`, `/api/auth/login`, the manifest, and the daily Garmin cron (`CRON_SECRET` bearer if set, else Vercel's cron user agent; that route only imports and returns counts). Five wrong passcodes in 15 minutes locks sign-in for 15 minutes. The cookie is signed with a key derived from `SESSION_SECRET`, else the service-role key. With no `APP_PASSCODE` set, the app is open, as before, and `/devices` says so. `components/AuthGuard.tsx` sends the browser to `/login` whenever our own API answers 401, since a page shown from the browser's cache (restored tab, back/forward) never reaches the middleware's redirect.
 
 ## Tabs & Features
+
+**Navigation** (`components/BottomNav.tsx`): Today · Progress · **+** · History · Goals. The raised **+** opens the Log sheet (`components/LogSheet.tsx`): Run (`/runs`), Lift or mobility (`/log`), Meal (`/fuel`), and Weigh-in, which saves right in the sheet. The log pages have no tabs of their own; the + is ringed while one is open. Icons live in `components/NavIcons.tsx`.
 
 ### Today (home tab — this is the default landing tab)
 - **Week plan**: an 11-day strip with today in the middle (5 back, 5 ahead), scrolling sideways and labelled by training week, showing each day's state (done / off-script / missed / today / upcoming) and a card for the selected day. Training weeks stay Sunday–Saturday; the strip stitches together the two or three weeks it touches, and next week is planned as soon as it enters the strip — session title, why it's there, target muscle regions, and exercises with loads anchored to recent top sets. Movements with no history get a one-line form cue and a "new" tag.
@@ -60,9 +62,16 @@ One person's app, so no accounts: `middleware.ts` + `lib/deviceAuth.ts`. A passc
 - **Run block** on any day with a run: miles, run type, target pace and the breakdown (warm-up / reps / cool-down). Target paces always come from the pace zones in code (`lib/paceZones.ts` via `lib/planner/runPlan.ts`), never the model; structured runs also show the easy pace for warm-up and recoveries. Lift muscle chips come from the exercises only, so a pull day doesn't show the run's leg regions.
 - **Logging splits by half.** A run + lift day gets "Log run" and "Log lift" (a run + mobility day: "Log run" and "Log mobility"); each flips to ✓ once that half is logged. "Log run" opens the Runs form prefilled (type, distance, pace for steady runs, the plan's target in notes); "Log lift" opens the Log tab one exercise per line. Everything stays editable. "Replan week" regenerates only the days still ahead: past days, and today once anything is logged on it, keep their sessions pinned (`frozen`), the model plans from `planFrom` (tomorrow when today is logged), the lift dose is net of gym days already logged this week, and the strength rules count what earlier days already did (a pattern that went heavy Sunday gets its volume day later).
 - **Body Map**: front/back figure, 17 muscle regions, filled by a rolling 7-day window (toggleable to all-time). Gym load fills green, run load teal — running credits quads/hamstrings/glutes/calves, otherwise a marathoner's legs read as neglected. Tap a region for last-trained and set counts.
-- Stats (below the plan) — everything in the section that follows, with the trend charts in a snap-scrolling carousel.
+- Goal countdown (`GoalCountdown`) below the body map. Stats moved to the Progress tab.
 
-### Stats (now a section of the Today tab)
+### Progress (tab, `/progress`)
+- **Lifts** (`components/LiftProgress.tsx`, `GET /api/lifts`): every lift with 2+ loaded sessions, newest-trained first (six, then "Show all"): status chip (Progressing / Stalled / Slipping / New, from `liftTrends`), best set and e1RM, × bodyweight for compound lifts (latest weigh-in, else `BODYWEIGHT_LB`), last set, and an e1RM sparkline
+- **Body**: the weigh-in card (`components/WeightCard.tsx`)
+- **Stats** — everything below, with the trend charts in a snap-scrolling carousel; then signed-in devices and data backup
+
+Refresh signals (`lib/refresh.ts`) gained a `weight` kind for weigh-ins.
+
+#### Stats
 - 7-day / Monthly toggle
 - Stat cards: Workouts, Runs, Cal Burned, Cal Consumed, Protein (g), Net Calories
 - Muscle Groups Hit — horizontal bar chart, frequency count by muscle group
@@ -110,7 +119,7 @@ One person's app, so no accounts: `middleware.ts` + `lib/deviceAuth.ts`. A passc
 - Races (upcoming, active), Focus, Past sections; each card shows date and days to go, priority (A Main / B Secondary / C For fun), distance, goal time and pace, notes, and "This week: …" when it drives the current week
 - Add / edit inline: name, date, distance chips (5K, 10K, Half, Marathon, or custom miles), goal time typed as digits (auto-colons), priority, focus, notes. Mark done / make active; delete uses the undo toast. `GET/POST /api/goals`, `PATCH/DELETE /api/goals/[id]` (`sanitizeGoal` validates)
 - **Running zones** card: today's paces and HR caps with where each came from (`/api/goals?zones=1`)
-- **Body** card: log a weigh-in (decimal keypad, date defaults today), latest / change since start / lb per week over 4 weeks, trend chart (dots = scale, green line = trend), last five with delete (undo toast). `GET/POST /api/weight`, `DELETE /api/weight/[date]`
+- **Body** card (now on the Progress tab): log a weigh-in (decimal keypad, date defaults today), latest / change since start / lb per week over 4 weeks, trend chart (dots = scale, green line = trend), last five with delete (undo toast). `GET/POST /api/weight`, `DELETE /api/weight/[date]`
 - A race with a hand-built plan links to it ("Race plan →" opens `/marathon`, still reachable and highlighted under Goals)
 - Today's countdown (`components/GoalCountdown.tsx`) follows the next active race, or the current focus when no race is ahead
 

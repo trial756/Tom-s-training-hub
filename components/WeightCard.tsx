@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import UndoToast from "@/components/UndoToast";
+import { notifyDataChanged, useRefreshOn } from "@/lib/refresh";
 import { formatShortDate, localDateKey } from "@/lib/format";
 import { parseWeight, weightSummary, type WeighIn } from "@/lib/weight";
 
@@ -31,6 +32,8 @@ export default function WeightCard() {
   useEffect(() => {
     load();
   }, [load]);
+  // A weigh-in from the Log sheet.
+  useRefreshOn(load, { kinds: ["weight"] });
 
   const visible = useMemo(
     () => (entries ?? []).filter((e) => e.date !== pendingDelete?.date),
@@ -56,6 +59,7 @@ export default function WeightCard() {
       if (!res.ok) throw new Error(json.error ?? "Couldn't save.");
       setText("");
       await load();
+      notifyDataChanged("weight");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save.");
     } finally {
@@ -148,6 +152,7 @@ export default function WeightCard() {
             await fetch(`/api/weight/${d}`, { method: "DELETE" });
             setPendingDelete(null);
             await load();
+            notifyDataChanged("weight");
           }}
         />
       )}
