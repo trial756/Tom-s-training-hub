@@ -18,11 +18,11 @@ import { localDateKey, shiftDays, startOfLocalDay } from "@/lib/format";
 //     when the section loaded recently and the day hasn't changed, so a
 //     quick app switch costs nothing.
 
-export type DataKind = "workout" | "run" | "meal";
+export type DataKind = "workout" | "run" | "meal" | "weight";
 
 const EVENT = "training-hub:data-changed";
 const CHANNEL = "training-hub-data";
-const ALL_KINDS: DataKind[] = ["workout", "run", "meal"];
+const ALL_KINDS: DataKind[] = ["workout", "run", "meal", "weight"];
 
 /** A foreground return reloads only if the section is at least this old. */
 const FOREGROUND_STALE_MS = 5 * 60 * 1000;

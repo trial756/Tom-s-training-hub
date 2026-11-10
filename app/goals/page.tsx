@@ -11,7 +11,6 @@ import { notifyDataChanged } from "@/lib/refresh";
 import type { FocusType, Goal, GoalPriority } from "@/lib/goals";
 import type { PaceZones } from "@/lib/paceZones";
 import PaceZonesCard from "@/components/PaceZonesCard";
-import WeightCard from "@/components/WeightCard";
 
 interface GoalsResponse {
   goals: Goal[];
@@ -407,11 +406,6 @@ export default function GoalsPage() {
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Running zones</h2>
           {data.zones && <PaceZonesCard zones={data.zones} />}
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Body</h2>
-          <WeightCard />
         </section>
 
         {past.length > 0 && (
