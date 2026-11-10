@@ -9,6 +9,10 @@ import BodyMap, { type BodyRegionData } from "@/components/BodyMap";
 import { localDateKey } from "@/lib/format";
 import type { WeekPlan } from "@/lib/planner/types";
 import { useRefreshOn } from "@/lib/refresh";
+import ReadinessCard from "@/components/ReadinessCard";
+import { plannedRunFor } from "@/lib/planner/runPlan";
+
+const KEY_RUNS = new Set(["Long", "Tempo", "Marathon Pace", "Interval", "Race"]);
 
 export default function TodayPage() {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
@@ -140,10 +144,23 @@ export default function TodayPage() {
     }
   }
 
+  // Today's hard session, if any, so the readiness card can speak to it.
+  const hardToday = (() => {
+    const day = plan?.days.find((d) => d.date === plan.today);
+    const session = day?.sessionId ? plan?.sessions.find((s) => s.id === day.sessionId) : undefined;
+    if (!session || day?.status === "done") return null;
+    const run = plannedRunFor(session, plan?.zones);
+    if (run && KEY_RUNS.has(run.type)) return session.title;
+    return session.taxesLegs ? session.title : null;
+  })();
 
   return (
     <div>
       <PageHeader title="Today" subtitle="Your plan for the week." />
+
+      <div className="mb-4 px-4">
+        <ReadinessCard hardToday={hardToday} />
+      </div>
 
       {planLoading ? (
         <Spinner label="Building this week's plan…" />
