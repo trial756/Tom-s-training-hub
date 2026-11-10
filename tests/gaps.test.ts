@@ -44,3 +44,9 @@ test("the last ten days add only strides and mobility", () => {
   const added = out.flatMap((s) => s.exercises.map((e) => e.name)).filter((n) => !["Dead Bug", "Incline Barbell Bench Press", "Back Squat", "Bent Over Barbell Row"].includes(n));
   assert.ok(added.every((n) => n === "Strides" || patternOf(n) === "mobility"), added.join(", "));
 });
+
+test("the weeks after a race add only mobility", () => {
+  const out = fillGaps(peakWeek(), { mode: "maintain", daysToRace: null, recoveryWeek: false, afterRace: true });
+  const added = out.flatMap((s) => s.exercises.map((e) => e.name)).filter((n) => !["Dead Bug", "Incline Barbell Bench Press", "Back Squat", "Bent Over Barbell Row"].includes(n));
+  assert.ok(added.every((n) => patternOf(n) === "mobility"), added.join(", "));
+});

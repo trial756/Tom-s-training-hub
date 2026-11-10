@@ -148,8 +148,28 @@ export interface PlannerContext {
   daysRemaining: number;
   /** First day still to plan — tomorrow once today has something logged. */
   planFrom: string;
+  /** What this week is for, from the goals (lib/goals.ts). */
+  block: {
+    kind: "race" | "recovery" | "focus" | "base";
+    summary: string;
+    goal: {
+      title: string;
+      kind: "race" | "focus";
+      date: string;
+      priority: "A" | "B" | "C";
+      distanceMi: number | null;
+      /** Seconds per mile, races with a target time only. */
+      goalPace: number | null;
+      focus: string | null;
+      notes: string | null;
+    } | null;
+    /** Other races within three weeks (C races, tune-ups): ease off around them. */
+    upcoming: { title: string; date: string; distance_mi: number | null; priority: "A" | "B" | "C"; daysAway: number }[];
+  };
+  /** The race block this week sits in (whichever race it builds toward), or null outside one. */
   marathon: {
     planWeek: number;
+    totalWeeks?: number;
     phase: string;
     weeklyMileage: number;
     longRunMiles: number;

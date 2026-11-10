@@ -1,7 +1,7 @@
 import { daysBetweenKeys, localDateKey, normalizeExerciseName, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
 import { MUSCLE_LABELS, MUSCLE_REGIONS, type MuscleRegion } from "@/lib/muscles";
 import { buildExerciseLookup, computeMuscleActivity, type ExerciseLookup } from "@/lib/muscleCoverage";
-import { buildMarathonPlan, currentWeek, RACE_DATE } from "@/lib/marathonPlan";
+import { blockForWeek, DEFAULT_GOALS, goalPaceSeconds, type Goal } from "@/lib/goals";
 import { strengthDoseFor } from "@/lib/planner/strength";
 import { liftTrends } from "@/lib/planner/progression";
 import { progressReport } from "@/lib/planner/strengthRules";
@@ -44,6 +44,8 @@ export function buildPlannerContext(opts: {
    * follow the planned week.
    */
   weekOf?: Date;
+  /** What the training is for (the goals table); defaults to DEFAULT_GOALS. */
+  goals?: Goal[];
   /** Sessions still scheduled before the planned week starts. */
   plannedBeforeWeek?: NonNullable<PlannerContext["plannedBeforeWeek"]>["sessions"];
 }): PlannerContext {
@@ -105,21 +107,29 @@ export function buildPlannerContext(opts: {
       opts.runs.filter((r) => thisWeek(r.logged_at)).reduce((sum, r) => sum + (Number(r.distance_miles) || 0), 0) * 10
     ) / 10;
 
-  // ── Marathon plan position ────────────────────────────────────────────
-  const weeks = buildMarathonPlan();
-  const active = currentWeek(weeks, weekStart);
-  const marathon = active
-    ? {
-        planWeek: active.weekNumber,
-        phase: active.phase,
-        weeklyMileage: active.weeklyMileage,
-        longRunMiles: active.longRunMiles,
-        focus: active.keyWorkout,
-        isRecoveryWeek: active.isRecoveryWeek,
-        isRaceWeek: active.isRaceWeek,
-        daysToRace: Math.max(0, daysBetweenKeys(todayKey, RACE_DATE)),
-      }
-    : null;
+  // ── What the week is for, from the goals ──────────────────────────────
+  // A race build sets `marathon` (the name predates goals: it's whichever
+  // race this week builds toward); recovery, focus and base weeks leave it null.
+  const blockInfo = blockForWeek(opts.goals?.length ? opts.goals : DEFAULT_GOALS, weekStart, todayKey);
+  const marathon = blockInfo.race;
+  const g = blockInfo.goal;
+  const block: PlannerContext["block"] = {
+    kind: blockInfo.kind,
+    summary: blockInfo.summary,
+    goal: g
+      ? {
+          title: g.title,
+          kind: g.kind,
+          date: g.date,
+          priority: g.priority,
+          distanceMi: g.distance_mi ?? null,
+          goalPace: goalPaceSeconds(g),
+          focus: g.focus ?? null,
+          notes: g.notes ?? null,
+        }
+      : null,
+    upcoming: blockInfo.upcoming,
+  };
 
   // ── Cadence, inferred rather than assumed ─────────────────────────────
   // Complete weeks only: planning next week early mustn't count the current,
@@ -234,7 +244,7 @@ export function buildPlannerContext(opts: {
 
   const strengthDose = strengthDoseFor({
     marathon,
-    postRace: !marathon && weekStart > RACE_DATE,
+    block: { kind: block.kind, focus: block.goal?.focus ?? null },
     liftDaysPerWeek,
   });
 
@@ -269,6 +279,7 @@ export function buildPlannerContext(opts: {
     weekEnd,
     daysRemaining,
     planFrom: fromKey,
+    block,
     marathon,
     milesThisWeek,
     milesRemaining: marathon ? Math.max(0, Math.round((marathon.weeklyMileage - milesThisWeek) * 10) / 10) : 0,

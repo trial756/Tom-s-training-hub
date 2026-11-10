@@ -101,11 +101,12 @@ export default function TodayPlan({
 
   return (
     <div className="px-4">
-      {/* Marathon position for the selected day's week */}
-      {planWeek != null && (
+      {/* Where the selected day's week sits: a race build's week, or the current goal */}
+      {(planWeek != null || phase) && (
         <div className="mb-3 flex items-center justify-between text-xs">
           <span className="text-muted">
-            Week {planWeek} · {phase}
+            {planWeek != null ? `Week ${planWeek} · ` : ""}
+            {phase}
             {!isCurrentWeek && <span className="text-faint">{isPastWeek ? " · last week" : " · next week"}</span>}
           </span>
           {isCurrentWeek && weeklyMileage != null && (
