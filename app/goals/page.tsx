@@ -9,11 +9,15 @@ import { daysBetweenKeys, localDateKey } from "@/lib/format";
 import { digitsToClock, parseClock, secondsToDigits } from "@/lib/clock";
 import { notifyDataChanged } from "@/lib/refresh";
 import type { FocusType, Goal, GoalPriority } from "@/lib/goals";
+import type { PaceZones } from "@/lib/paceZones";
+import PaceZonesCard from "@/components/PaceZonesCard";
+import WeightCard from "@/components/WeightCard";
 
 interface GoalsResponse {
   goals: Goal[];
   nextRace: Goal | null;
   block: { kind: string; summary: string; goalId: string | null };
+  zones?: PaceZones;
 }
 
 const DISTANCES: { label: string; miles: number }[] = [
@@ -90,7 +94,7 @@ export default function GoalsPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/goals", { cache: "no-store" });
+      const res = await fetch("/api/goals?zones=1", { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Couldn't load goals.");
       setData(json);
@@ -398,6 +402,16 @@ export default function GoalsPage() {
               + Add a focus
             </button>
           )}
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Running zones</h2>
+          {data.zones && <PaceZonesCard zones={data.zones} />}
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Body</h2>
+          <WeightCard />
         </section>
 
         {past.length > 0 && (

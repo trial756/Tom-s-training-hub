@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateRunCoaching, type StructuredRunInput } from "@/lib/anthropic";
 import { localDateKey, shiftDays } from "@/lib/format";
 import { formatPaceRange, plannedRunFor, type PlannedRun } from "@/lib/planner/runPlan";
+import { loadPaceZones } from "@/lib/paceZonesStore";
 import type { PlanSession } from "@/lib/planner/types";
 import { buildRunHistoryContext, composeRunSummary, normalizeRunBody } from "@/lib/runInput";
 import { sanitizeIntervals } from "@/lib/intervals";
@@ -30,7 +31,7 @@ export async function plannedFor(dateKey: string): Promise<PlannedForDay | null>
     for (const [sessionId, date] of Object.entries((row.assignments ?? {}) as Record<string, string>)) {
       if (date !== dateKey) continue;
       const session = sessions.find((s) => s.id === sessionId);
-      if (session) return { title: session.title, run: plannedRunFor(session) };
+      if (session) return { title: session.title, run: plannedRunFor(session, await loadPaceZones()) };
     }
   }
   return null;

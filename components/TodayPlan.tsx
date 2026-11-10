@@ -74,7 +74,7 @@ export default function TodayPlan({
   const headline = isCurrentWeek ? plan.headline : week?.headline ?? "";
   const pending = !!week?.pending;
   const isFuture = todayKey != null && (selected?.date ?? "") > todayKey;
-  const run = session ? plannedRunFor(session) : null;
+  const run = session ? plannedRunFor(session, plan.zones) : null;
   const liftRegions = session ? liftRegionsFor(session) : [];
   // Not tied to the day reading "done": a run + mobility day is done once the
   // run is in, but the mobility half must stay loggable. Each button shows a
@@ -275,7 +275,7 @@ export default function TodayPlan({
           <div className="mt-3 flex gap-2">
             {run && (
               <LogButton
-                href={`/runs?${runPrefillQuery(session, selected?.date ?? null)}`}
+                href={`/runs?${runPrefillQuery(session, selected?.date ?? null, plan.zones)}`}
                 done={!!selected?.loggedRun}
                 label="Log run"
                 primary
