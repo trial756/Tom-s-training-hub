@@ -482,8 +482,9 @@ const mealSchema = {
         additionalProperties: false,
       },
       description:
-        "Each distinct food item mentioned, with its own estimated macros — use reasonable nutritional estimates " +
-        "for typical portion sizes when exact amounts aren't given.",
+        "Each distinct food item mentioned, with its own estimated macros for the WHOLE amount eaten of it — " +
+        "'4 cookies' is one item 'Cookies (x4)' carrying all four cookies' macros, 'half a biscuit' is one item " +
+        "with half the macros. Use reasonable estimates for typical portions when amounts aren't given.",
     },
     calories: { type: ["integer", "null"], description: "Total calories — should equal roughly the sum of the items' calories_est." },
     protein_g: { type: ["number", "null"], description: "Total protein — should equal roughly the sum of the items' protein_g." },
@@ -494,7 +495,10 @@ const mealSchema = {
     coaching_feedback: {
       type: "string",
       description:
-        "1-3 sentences of practical fueling feedback for a marathon-training runner: macro balance, timing relative to training, and one concrete suggestion.",
+        "1-2 sentences on the athlete's nutrition for the day as a whole, using the day so far: where protein and " +
+        "energy stand against the day's needs, and one concrete next step for later meals. Never suggest adding a " +
+        "food already eaten today. Mention training only when it matters for this meal (fuel before a long or hard " +
+        "session, recovery after one); otherwise talk about the day's eating, not running.",
     },
   },
   required: ["meal_type", "items", "calories", "protein_g", "carbs_g", "fat_g", "summary", "notes", "coaching_feedback"],
@@ -503,7 +507,8 @@ const mealSchema = {
 
 export async function parseMealEntry(
   text: string,
-  image?: { mediaType: "image/jpeg" | "image/png" | "image/webp"; data: string }
+  image?: { mediaType: "image/jpeg" | "image/png" | "image/webp"; data: string },
+  dayContext = ""
 ): Promise<ParsedMeal> {
   const photoRules = image
     ? " A photo of the meal is attached. Identify each food you can see and estimate its portion from the plate, " +
@@ -514,12 +519,18 @@ export async function parseMealEntry(
     : "";
   return parseWithTool<ParsedMeal>({
     system:
-      "You are a sports nutritionist parsing a meal log into structured data for a runner training " +
-      "for a marathon. Break the meal into individual food items and estimate calories/macros per item — use " +
-      "reasonable nutritional estimates for common foods and typical portion sizes when exact amounts aren't " +
-      "given — then roll those up into meal totals. Then give brief, practical fueling feedback." +
-      photoRules,
-    userText: image ? (text.trim() ? `Athlete's note: ${text}` : "Log the meal in this photo.") : text,
+      "You are a sports nutritionist parsing a meal log into structured data for an athlete who runs and lifts. " +
+      "Break the meal into individual food items and estimate calories/macros per item — use reasonable " +
+      "nutritional estimates for common foods and typical portion sizes when exact amounts aren't given — then " +
+      "roll those up into meal totals. Then give brief feedback on the day's nutrition as a whole: you're given " +
+      "what was already eaten today and the day's training, so treat this meal as one part of the day (two small " +
+      "items an hour apart are one breakfast), and don't judge it alone or as run fuel by default." +
+      photoRules +
+      "\n\n" +
+      todayContext(),
+    userText:
+      (image ? (text.trim() ? `Athlete's note: ${text}` : "Log the meal in this photo.") : `Meal: ${text}`) +
+      (dayContext ? `\n\nThe day around this meal:\n${dayContext}` : ""),
     image,
     toolName: "record_meal",
     toolDescription: "Records a structured, parsed meal with itemized macros and coaching feedback.",
