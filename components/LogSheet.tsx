@@ -64,6 +64,13 @@ export default function LogSheet({ onClose }: { onClose: () => void }) {
               <span className="block text-xs text-muted">Distance, time, feel — or confirm a Garmin run</span>
             </span>
           </Link>
+          <Link href="/workout" className={row}>
+            <TimerIcon />
+            <span className="flex-1">
+              <span className="block text-sm font-semibold text-ink">Start a workout</span>
+              <span className="block text-xs text-muted">Tick sets as you go, with a rest timer</span>
+            </span>
+          </Link>
           <Link href="/log" className={row}>
             <LogIcon active />
             <span className="flex-1">
@@ -108,6 +115,15 @@ export default function LogSheet({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function TimerIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00e676" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="13" r="8" />
+      <path d="M12 9v4l2.5 2.5M9 2h6" />
+    </svg>
   );
 }
 

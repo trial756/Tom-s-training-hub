@@ -80,6 +80,12 @@ Refresh signals (`lib/refresh.ts`) gained a `weight` kind for weigh-ins.
 - **AI Coaching Summary** — on-demand button generates: headline, summary, wins[], watchouts[], next_week_focus. See "Meal logging gap awareness" below.
 - Data Backup — export all data as JSON text (copy/paste), import/restore by merging on id (never deletes)
 
+### Workout mode (`/workout`)
+- Started from **Start workout** on today's lift session (prefilled from the plan: sets, reps, load, the progression note, a cue for new movements) or **Start a workout** in the Log sheet (empty; add exercises by name). The workout lives on the phone (`localStorage`, `lib/workoutSession.ts`), so it survives switching apps, a locked screen or a reload; a "workout in progress" pill (`components/ActiveWorkoutPill.tsx`) leads back to it from any page.
+- Each set: weight (decimal keypad) × reps (number pad) and a 44px ✓. Changing a number carries to the later unticked sets that still had the old one. + Set / − Set, add exercise, notes.
+- Ticking a set starts the **rest timer** (bar above the nav: −15 / +15 / Skip), sized by the work: ≤5 reps 3:00, ≤7 2:00, ≤12 1:30, more 1:00, core/mobility 0:45. It runs off an end timestamp, so a sleeping phone still counts it; at zero it vibrates and beeps. The screen is kept awake (Wake Lock) where supported.
+- **Finish & log** posts the ticked sets to `POST /api/workouts` with `exercises` (stored exactly, standard lift names) and `duration_minutes` (elapsed), plus the matching text for the parser, so coaching and "vs last time" work as for a typed log; a failed save keeps the workout on the phone. Discard uses the undo toast.
+
 ### Log (workout entry)
 - Quick Log chips: Chest Day, Back Day, Leg Day, Shoulders, Arms, Core, Yoga, Rest Day (prefill text, don't auto-submit)
 - Date picker (defaults today, can backdate)
