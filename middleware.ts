@@ -4,7 +4,7 @@ import { COOKIE, RENEW_BELOW_DAYS, authEnabled, cookieOptions, newExpiry, signTo
 // Every page and API route needs a signed-in device (lib/deviceAuth.ts),
 // except the sign-in page itself and the daily Garmin cron.
 
-const PUBLIC = [/^\/login$/, /^\/api\/auth\/login$/, /^\/manifest\.json$/, /^\/icons\//, /^\/favicon/];
+const PUBLIC = [/^\/login$/, /^\/api\/auth\/login$/, /^\/manifest\.json$/, /^\/icons\//, /^\/favicon/, /^\/sw\.js$/];
 
 // Revocation: a device row is checked at most every few minutes per server
 // instance, so "Sign out" on another device takes effect within minutes.

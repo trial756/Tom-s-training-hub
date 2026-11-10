@@ -1,5 +1,6 @@
 "use client";
 
+import { postOrQueue } from "@/lib/outbox";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { resizeImage } from "@/lib/imageResize";
 import PageHeader from "@/components/PageHeader";
@@ -46,6 +47,7 @@ export default function FuelPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Meal | null>(null);
+  const [savedOffline, setSavedOffline] = useState<string | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -134,18 +136,26 @@ export default function FuelPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/meals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      setSavedOffline(null);
+      const result = await postOrQueue<{ meal: Meal }>(
+        "/api/meals",
+        {
           text,
           logged_at: loggedAtFor(date),
           ...(photo ? { image: { media_type: "image/jpeg", data: photo.base64 } } : {}),
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Failed to log meal.");
-      setLastSaved(json.meal);
+        },
+        { kind: "meal", label: `Meal · ${text.trim().slice(0, 40) || "photo"}` }
+      );
+      if (result.queued) {
+        setLastSaved(null);
+        setSavedOffline("Saved on this phone. It\u2019ll sync, with macros, when you\u2019re back online.");
+        setText("");
+        setPhoto(null);
+        setDate(todayISO());
+        return;
+      }
+      if (!result.ok) throw new Error(result.error);
+      setLastSaved(result.data.meal);
       notifyDataChanged("meal");
       setText("");
       setPhoto(null);
@@ -295,6 +305,7 @@ export default function FuelPage() {
           {submitting ? (photo ? "Reading the photo…" : "Parsing with AI…") : "Log Meal"}
         </button>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+        {savedOffline && <p className="mt-2 text-sm text-fuel">{savedOffline}</p>}
       </form>
 
       {submitting && <Spinner label="Claude is estimating macros…" />}

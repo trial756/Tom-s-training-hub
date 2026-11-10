@@ -1,5 +1,6 @@
 "use client";
 
+import { postOrQueue } from "@/lib/outbox";
 import { useEffect, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import CoachingNote from "@/components/CoachingNote";
@@ -31,6 +32,7 @@ export default function LogPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Workout | null>(null);
+  const [savedOffline, setSavedOffline] = useState<string | null>(null);
   const [recent, setRecent] = useState<RecentEntry[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [savingFavorite, setSavingFavorite] = useState(false);
@@ -94,15 +96,22 @@ export default function LogPage() {
     setSubmitting(true);
     setError(null);
     setFavoriteSaved(false);
+    setSavedOffline(null);
     try {
-      const res = await fetch("/api/workouts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, logged_at: loggedAtFor(date) }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Failed to log workout.");
-      setLastSaved(json.workout);
+      const result = await postOrQueue<{ workout: Workout }>(
+        "/api/workouts",
+        { text, logged_at: loggedAtFor(date) },
+        { kind: "workout", label: `Workout · ${text.trim().split("\n")[0].slice(0, 40)}` }
+      );
+      if (result.queued) {
+        setLastSaved(null);
+        setSavedOffline("Saved on this phone. It\u2019ll sync, with coaching, when you\u2019re back online.");
+        setText("");
+        setDate(todayISO());
+        return;
+      }
+      if (!result.ok) throw new Error(result.error);
+      setLastSaved(result.data.workout);
       notifyDataChanged("workout");
       setText("");
       setDate(todayISO());
@@ -181,6 +190,7 @@ export default function LogPage() {
           {submitting ? "Parsing with AI…" : "Log Workout"}
         </button>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+        {savedOffline && <p className="mt-2 text-sm text-fuel">{savedOffline}</p>}
       </form>
 
       {submitting && <Spinner label="Claude is parsing your workout…" />}

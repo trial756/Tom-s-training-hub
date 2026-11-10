@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import UndoToast from "@/components/UndoToast";
 import { localDateKey, loggedAtFor } from "@/lib/format";
 import { notifyDataChanged } from "@/lib/refresh";
+import { postOrQueue } from "@/lib/outbox";
 import {
   completedExercises,
   elapsedMinutes,
@@ -183,21 +184,19 @@ export default function WorkoutPage() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/workouts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: workoutText(w, notes),
-          exercises,
-          duration_minutes: elapsedMinutes(w),
-          logged_at: loggedAtFor(w.date),
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Couldn't log the workout.");
+      const result = await postOrQueue<{ workout: Logged }>(
+        "/api/workouts",
+        { text: workoutText(w, notes), exercises, duration_minutes: elapsedMinutes(w), logged_at: loggedAtFor(w.date) },
+        { kind: "workout", label: `Workout · ${w.title}` }
+      );
+      if (!result.queued && !result.ok) throw new Error(result.error);
       saveActiveWorkout(null);
+      if (result.queued) {
+        setLogged({ summary: `${w.title} — saved on this phone`, coaching_feedback: "No signal right now. It syncs by itself when you're back online, and the coaching arrives then.", vs_last_time: null });
+        return;
+      }
       notifyDataChanged("workout");
-      setLogged(json.workout);
+      setLogged(result.data.workout);
     } catch (err) {
       // The workout stays on the phone, so nothing is lost; try again.
       setError(err instanceof Error ? `${err.message} Your sets are saved on this phone — try again.` : "Couldn't log the workout.");

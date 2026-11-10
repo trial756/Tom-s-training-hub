@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { parseMealEntry } from "@/lib/anthropic";
+import { existingByClientId, isDuplicate, readClientId } from "@/lib/clientId";
 import { normalizeMealKey } from "@/lib/mealFavorites";
 
 export const runtime = "nodejs";
@@ -71,6 +72,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const clientId = readClientId(body);
+    const already = await existingByClientId("meals", clientId);
+    if (already) return NextResponse.json({ meal: already }, { status: 200 });
     const text: string = typeof body.text === "string" ? body.text.trim() : "";
     const image = readImage(body.image);
     if ("error" in image) return NextResponse.json({ error: image.error }, { status: 400 });
@@ -87,6 +91,7 @@ export async function POST(req: NextRequest) {
       .from("meals")
       .insert({
         raw_text: rawText,
+        client_id: clientId,
         meal_type: parsed.meal_type,
         calories: parsed.calories,
         protein_g: parsed.protein_g,
@@ -101,6 +106,7 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
 
+    if (isDuplicate(error)) return NextResponse.json({ meal: await existingByClientId("meals", clientId) }, { status: 200 });
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

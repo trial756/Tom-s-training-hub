@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import UndoToast from "@/components/UndoToast";
+import { postOrQueue } from "@/lib/outbox";
 import { notifyDataChanged, useRefreshOn } from "@/lib/refresh";
 import { formatShortDate, localDateKey } from "@/lib/format";
 import { parseWeight, weightSummary, type WeighIn } from "@/lib/weight";
@@ -50,13 +51,13 @@ export default function WeightCard() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/weight", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, weight_lb: weight }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Couldn't save.");
+      const result = await postOrQueue("/api/weight", { date, weight_lb: weight }, { kind: "weight", label: `Weigh-in · ${weight} lb` });
+      if (result.queued) {
+        setText("");
+        setError("Saved on this phone — it'll sync when you're back online.");
+        return;
+      }
+      if (!result.ok) throw new Error(result.error);
       setText("");
       await load();
       notifyDataChanged("weight");

@@ -6,6 +6,7 @@ import { LogIcon, FuelIcon, RunIcon } from "@/components/NavIcons";
 import { localDateKey } from "@/lib/format";
 import { parseWeight } from "@/lib/weight";
 import { notifyDataChanged } from "@/lib/refresh";
+import { postOrQueue } from "@/lib/outbox";
 
 /**
  * One place to log anything. Runs, lifts and meals open their forms; a
@@ -32,14 +33,14 @@ export default function LogSheet({ onClose }: { onClose: () => void }) {
     setSaving(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/weight", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: localDateKey(new Date()), weight_lb: weight }),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Couldn't save.");
-      notifyDataChanged("weight");
-      setMessage(`Logged ${weight} lb`);
+      const result = await postOrQueue(
+        "/api/weight",
+        { date: localDateKey(new Date()), weight_lb: weight },
+        { kind: "weight", label: `Weigh-in · ${weight} lb` }
+      );
+      if (!result.queued && !result.ok) throw new Error(result.error);
+      if (!result.queued) notifyDataChanged("weight");
+      setMessage(result.queued ? `Saved ${weight} lb on this phone — syncs when you're online` : `Logged ${weight} lb`);
       setText("");
       setTimeout(onClose, 900);
     } catch (err) {

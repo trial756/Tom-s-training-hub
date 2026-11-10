@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { existingByClientId, isDuplicate, readClientId } from "@/lib/clientId";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateRunCoaching } from "@/lib/anthropic";
 import { buildRunHistoryContext, composeRunSummary, normalizeRunBody } from "@/lib/runInput";
@@ -22,6 +23,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const clientId = readClientId(body);
+    const already = await existingByClientId("runs", clientId);
+    if (already) return NextResponse.json({ run: already }, { status: 200 });
 
     const { structured, shoes } = normalizeRunBody(body);
 
@@ -32,6 +36,7 @@ export async function POST(req: NextRequest) {
       .from("runs")
       .insert({
         raw_text: composeRunSummary(structured),
+        client_id: clientId,
         distance_miles: structured.distance_miles,
         duration_seconds: structured.duration_seconds,
         pace_seconds_per_mile: structured.pace_seconds_per_mile,
@@ -60,6 +65,7 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
 
+    if (isDuplicate(error)) return NextResponse.json({ run: await existingByClientId("runs", clientId) }, { status: 200 });
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
