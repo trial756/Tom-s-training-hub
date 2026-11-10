@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { resizeImage } from "@/lib/imageResize";
 import PageHeader from "@/components/PageHeader";
 import CoachingNote from "@/components/CoachingNote";
 import Spinner from "@/components/Spinner";
@@ -35,6 +36,10 @@ interface PendingDelete {
 export default function FuelPage() {
   const [date, setDate] = useState(todayISO());
   const [text, setText] = useState("");
+  // A meal photo, already shrunk on the phone; only sent, never stored.
+  const [photo, setPhoto] = useState<{ dataUrl: string; base64: string } | null>(null);
+  const [readingPhoto, setReadingPhoto] = useState(false);
+  const photoInput = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Meal | null>(null);
@@ -105,22 +110,42 @@ export default function FuelPage() {
     });
   }
 
+  async function pickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // the same photo can be picked again after removing it
+    if (!file) return;
+    setReadingPhoto(true);
+    setError(null);
+    try {
+      setPhoto(await resizeImage(file));
+    } catch {
+      setError("Couldn't read that photo. Try another, or describe the meal instead.");
+    } finally {
+      setReadingPhoto(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() && !photo) return;
     setSubmitting(true);
     setError(null);
     try {
       const res = await fetch("/api/meals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, logged_at: loggedAtFor(date) }),
+        body: JSON.stringify({
+          text,
+          logged_at: loggedAtFor(date),
+          ...(photo ? { image: { media_type: "image/jpeg", data: photo.base64 } } : {}),
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to log meal.");
       setLastSaved(json.meal);
       notifyDataChanged("meal");
       setText("");
+      setPhoto(null);
       setDate(todayISO());
       loadAll();
     } catch (err) {
@@ -177,7 +202,7 @@ export default function FuelPage() {
 
   return (
     <div>
-      <PageHeader title="Log a Meal" subtitle="Describe what you ate — macros are estimated automatically." />
+      <PageHeader title="Log a Meal" subtitle="Describe it or snap a photo — macros are estimated automatically." />
 
       {favoriteChips.length > 0 && (
         <div className="mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
@@ -205,16 +230,50 @@ export default function FuelPage() {
           disabled={submitting}
         />
 
+        <input ref={photoInput} type="file" accept="image/*" className="hidden" onChange={pickPhoto} />
+        {photo ? (
+          <div className="relative mb-3 overflow-hidden rounded-xl border border-base-700">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photo.dataUrl} alt="Meal photo" className="max-h-56 w-full object-cover" />
+            <button
+              type="button"
+              aria-label="Remove photo"
+              onClick={() => setPhoto(null)}
+              disabled={submitting}
+              className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-lg text-ink"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => photoInput.current?.click()}
+            disabled={submitting || readingPhoto}
+            className="btn-secondary mb-3 flex min-h-[44px] w-full items-center justify-center gap-2 text-sm"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+              <circle cx="12" cy="13.5" r="3.5" />
+            </svg>
+            {readingPhoto ? "Reading photo…" : "Snap or choose a photo"}
+          </button>
+        )}
+
         <textarea
           ref={textareaRef}
           className="input-field min-h-[110px] resize-none"
-          placeholder="e.g. Post-run breakfast: 3 eggs, oatmeal with banana and peanut butter, black coffee."
+          placeholder={
+            photo
+              ? "Anything the photo can't show (optional): e.g. 'ate half the rice', 'cooked in butter', '8 oz chicken'."
+              : "e.g. Post-run breakfast: 3 eggs, oatmeal with banana and peanut butter, black coffee."
+          }
           value={text}
           onChange={(e) => setText(e.target.value)}
           disabled={submitting}
         />
-        <button type="submit" className="btn-primary mt-3 w-full" disabled={submitting || !text.trim()}>
-          {submitting ? "Parsing with AI…" : "Log Meal"}
+        <button type="submit" className="btn-primary mt-3 w-full" disabled={submitting || readingPhoto || (!text.trim() && !photo)}>
+          {submitting ? (photo ? "Reading the photo…" : "Parsing with AI…") : "Log Meal"}
         </button>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </form>

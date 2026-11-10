@@ -36,6 +36,24 @@ async function bumpMealFavoriteCount(text: string, summary: string) {
   }
 }
 
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+type ImageType = (typeof IMAGE_TYPES)[number];
+// The client shrinks photos to ~300 KB; this only stops something absurd.
+const MAX_IMAGE_BASE64 = 4_000_000;
+
+/** The optional meal photo: { media_type, data } with base64 data. The photo itself isn't stored. */
+function readImage(raw: unknown): { image: { mediaType: ImageType; data: string } | null } | { error: string } {
+  if (raw == null) return { image: null };
+  const r = raw as { media_type?: unknown; data?: unknown };
+  if (typeof r.media_type !== "string" || !IMAGE_TYPES.includes(r.media_type as ImageType)) {
+    return { error: "Photo must be JPEG, PNG or WebP." };
+  }
+  if (typeof r.data !== "string" || !r.data || r.data.length > MAX_IMAGE_BASE64 || !/^[A-Za-z0-9+/=]+$/.test(r.data)) {
+    return { error: "Photo is missing or too large." };
+  }
+  return { image: { mediaType: r.media_type as ImageType, data: r.data } };
+}
+
 export async function GET(req: NextRequest) {
   const limit = Number(req.nextUrl.searchParams.get("limit") ?? 50);
   const { data, error } = await supabaseAdmin()
@@ -53,17 +71,22 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const text: string = body.text;
-    if (!text || typeof text !== "string" || !text.trim()) {
-      return NextResponse.json({ error: "Missing 'text' field." }, { status: 400 });
+    const text: string = typeof body.text === "string" ? body.text.trim() : "";
+    const image = readImage(body.image);
+    if ("error" in image) return NextResponse.json({ error: image.error }, { status: 400 });
+    if (!text && !image.image) {
+      return NextResponse.json({ error: "Describe the meal or add a photo." }, { status: 400 });
     }
 
-    const parsed = await parseMealEntry(text);
+    const parsed = await parseMealEntry(text, image.image ?? undefined);
+    // A photo-only meal is stored under what Claude saw, so it reads well in
+    // lists and can be starred and re-logged as text later.
+    const rawText = text || parsed.summary;
 
     const { data, error } = await supabaseAdmin()
       .from("meals")
       .insert({
-        raw_text: text,
+        raw_text: rawText,
         meal_type: parsed.meal_type,
         calories: parsed.calories,
         protein_g: parsed.protein_g,
@@ -82,7 +105,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    await bumpMealFavoriteCount(text, parsed.summary);
+    await bumpMealFavoriteCount(rawText, parsed.summary);
 
     return NextResponse.json({ meal: data }, { status: 201 });
   } catch (err) {

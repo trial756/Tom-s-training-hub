@@ -32,6 +32,8 @@ async function parseWithTool<T>(opts: {
   toolName: string;
   toolDescription: string;
   inputSchema: Record<string, unknown>;
+  /** A photo to read alongside the text (meal photos). */
+  image?: { mediaType: "image/jpeg" | "image/png" | "image/webp"; data: string };
 }): Promise<T> {
   const response = await client().messages.create({
     model: MODEL,
@@ -47,7 +49,17 @@ async function parseWithTool<T>(opts: {
       },
     ],
     tool_choice: { type: "tool", name: opts.toolName },
-    messages: [{ role: "user", content: opts.userText }],
+    messages: [
+      {
+        role: "user",
+        content: opts.image
+          ? [
+              { type: "image", source: { type: "base64", media_type: opts.image.mediaType, data: opts.image.data } },
+              { type: "text", text: opts.userText },
+            ]
+          : opts.userText,
+      },
+    ],
   });
 
   const toolUse = response.content.find(
@@ -489,14 +501,26 @@ const mealSchema = {
   additionalProperties: false,
 };
 
-export async function parseMealEntry(text: string): Promise<ParsedMeal> {
+export async function parseMealEntry(
+  text: string,
+  image?: { mediaType: "image/jpeg" | "image/png" | "image/webp"; data: string }
+): Promise<ParsedMeal> {
+  const photoRules = image
+    ? " A photo of the meal is attached. Identify each food you can see and estimate its portion from the plate, " +
+      "utensils and packaging for scale; read any nutrition label or menu that's in frame. The athlete's text, if " +
+      "any, wins over the photo (portion sizes, hidden ingredients like oil or dressing, what was actually eaten). " +
+      "If part of the plate is ambiguous, pick the most likely food and say so briefly in notes. If the photo shows " +
+      "no food at all, return a single item named 'Unrecognized photo' with null macros and say so in notes."
+    : "";
   return parseWithTool<ParsedMeal>({
     system:
-      "You are a sports nutritionist parsing a natural-language meal log into structured data for a runner training " +
+      "You are a sports nutritionist parsing a meal log into structured data for a runner training " +
       "for a marathon. Break the meal into individual food items and estimate calories/macros per item — use " +
       "reasonable nutritional estimates for common foods and typical portion sizes when exact amounts aren't " +
-      "given — then roll those up into meal totals. Then give brief, practical fueling feedback.",
-    userText: text,
+      "given — then roll those up into meal totals. Then give brief, practical fueling feedback." +
+      photoRules,
+    userText: image ? (text.trim() ? `Athlete's note: ${text}` : "Log the meal in this photo.") : text,
+    image,
     toolName: "record_meal",
     toolDescription: "Records a structured, parsed meal with itemized macros and coaching feedback.",
     inputSchema: mealSchema,

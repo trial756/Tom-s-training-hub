@@ -104,6 +104,7 @@ Refresh signals (`lib/refresh.ts`) gained a `weight` kind for weigh-ins.
 ### Fuel (meal entry)
 - **Favorites row** at top — meals become favorites two ways: (1) manually starred after logging, (2) automatically once logged 3+ times. Sorted starred-first then by frequency. Tapping a favorite **prefills** the text box (does not auto-submit).
 - Date picker, free-text box, AI-parsed on submit
+- **Meal photo**: "Snap or choose a photo" (camera or library). The phone shrinks it to 1280px JPEG (`lib/imageResize.ts`, also drops EXIF/location) and it's sent with the text as `image: { media_type, data }` (base64) to `POST /api/meals`; Claude reads the plate, and any typed text wins over the photo (portions, oil, what was actually eaten). Text is optional with a photo. The photo is used for parsing only, never stored; a photo-only meal is saved under Claude's summary as its `raw_text`, so it can be starred and re-logged as text
 - Today's macro pills: Protein / Carbs / Fat (grams)
 - Today's meal list (expandable cards, star toggle, delete)
 - Meal history list (older days)
@@ -184,7 +185,7 @@ The course averages roughly 20–27 ft of climb per mile vs 33–60 ft/mi on Tom
 
 **parseRun**: structured distance/duration/pace/HR/calories/type/feel + pace_note (vs. 8:01 goal) + coaching feedback + weekly pattern note.
 
-**parseMeal**: itemized macros (protein/carbs/fat/calories per item) + meal_type + short supportive note.
+**parseMeal**: itemized macros (protein/carbs/fat/calories per item) + meal_type + short supportive note. With a photo, the image goes in the same message (`parseWithTool`'s `image`), with rules to estimate portions from what's in frame, read labels, let the athlete's text win, and flag a photo with no food.
 
 **summarizeTraining** (weekly/monthly review): headline + 3-4 sentence summary + wins[] + watchouts[] + next_week_focus. **Includes meal-logging coverage awareness**: computes how many distinct days in the range had ≥1 meal logged, tells the model this reflects logging habits not actual eating, and instructs it to never assume gaps mean "didn't eat" — if coverage is under 50%, gently flag inconsistent logging and encourage more consistent tracking (supportive, not preachy); say nothing if coverage is already good.
 
