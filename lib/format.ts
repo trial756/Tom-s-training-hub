@@ -1,3 +1,4 @@
+import { exerciseKey } from "@/lib/exerciseNames";
 export function formatPace(secondsPerMile: number | null | undefined): string {
   if (!secondsPerMile || secondsPerMile <= 0) return "—";
   const min = Math.floor(secondsPerMile / 60);
@@ -171,26 +172,11 @@ export function startOfWeekSunday(d: Date): Date {
   return midnightOf(y, m, day - dow);
 }
 
-// Equipment words that get dropped when grouping lifts, because the AI
-// parser has historically logged the same movement both with and without
-// them ("Incline Barbell Bench Press" vs "Incline Bench Press"). Only words
-// that don't distinguish a genuinely different lift belong here — "dumbbell"
-// and "machine" must stay, since those are different movements.
-const GROUPING_STOPWORDS = new Set(["barbell"]);
-
 /**
- * Collapses spelling variants of the same lift into one grouping key, so
- * progress on a lift isn't split across near-identical names. Grouping only —
- * display always uses the most common original spelling.
+ * The one grouping key for a lift, however it was logged: tidied, word
+ * order ignored, known aliases mapped to the standard name
+ * (lib/exerciseNames.ts). Grouping only — display uses the logged words.
  */
 export function normalizeExerciseName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .filter((w) => w && !GROUPING_STOPWORDS.has(w))
-    .map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w))
-    .join(" ");
+  return exerciseKey(name);
 }

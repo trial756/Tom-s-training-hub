@@ -37,6 +37,8 @@ This app is being migrated from a Claude.ai artifact (React + local key-value st
 
 **exercise_muscles**: key (normalized exercise name), display_name, primary_muscles[], secondary_muscles[], source ('seed' | 'ai'). Keyed by exercise rather than tagged per workout, so correcting a tag fixes every past and future session using that movement. The parser proposes tags for exercises it hasn't met; existing rows are never overwritten.
 
+**One name per lift** (`lib/exerciseNames.ts`): every grouping (trends, progression, stall checks, "new" tags, muscle lookups) goes through `normalizeExerciseName` → `exerciseKey`, which tidies a name and maps known aliases to the lift's standard name in any word order (`EXERCISE_ALIASES`: e.g. Incline Bench Press / Incline Barbell Press → Incline Barbell Bench Press; Tricep Pulldown / Cable Tricep Pulldown → Tricep Pushdown). Only true synonyms are aliased; a different grip, implement or one-arm version stays its own lift. Stored workouts keep the words as logged; AI-parsed logs are saved under the standard name and the parser is given the standard names. Names with no alias keep their old key, so `exercise_muscles` rows still match; rows under an alias key are also found under the standard key. Add an alias whenever a new variant shows up.
+
 **week_plans**: week_start (Sunday, PK), plan_week, phase, headline, sessions[] (what the week should contain), assignments{sessionId: date} (where each currently sits), context (the facts packet it was generated from)
 
 ---
