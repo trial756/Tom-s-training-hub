@@ -6,12 +6,13 @@ import PageHeader from "@/components/PageHeader";
 import StatTile from "@/components/StatTile";
 import Spinner from "@/components/Spinner";
 import { formatPace, formatMinutes } from "@/lib/format";
-import { RACE_DATE, GOAL_TIME, GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
+import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
+import GoalCountdown from "@/components/GoalCountdown";
 import ChartFrame from "@/components/charts/ChartFrame";
 import ChartCarousel from "@/components/charts/ChartCarousel";
 import TodayPlan from "@/components/TodayPlan";
 import BodyMap, { type BodyRegionData } from "@/components/BodyMap";
-import { daysBetweenKeys, localDateKey } from "@/lib/format";
+import { localDateKey } from "@/lib/format";
 import type { WeekPlan } from "@/lib/planner/types";
 import { notifyDataChanged, useRefreshOn } from "@/lib/refresh";
 import BarChart from "@/components/charts/BarChart";
@@ -301,7 +302,6 @@ export default function StatsPage() {
     }
   }
 
-  const daysToRace = Math.max(0, daysBetweenKeys(localDateKey(new Date()), RACE_DATE));
 
   const maxMuscleCount = stats ? Math.max(...stats.muscleGroups.map((m) => m.count), 1) : 1;
   const totalMuscleHits = stats ? stats.muscleGroups.reduce((sum, m) => sum + m.count, 0) : 0;
@@ -343,13 +343,7 @@ export default function StatsPage() {
       )}
 
       <div className="mt-5 px-4">
-        <Link href="/marathon" className="card flex items-center justify-between bg-gradient-to-r from-accent/20 to-transparent">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-gray-400">Marathon countdown</p>
-            <p className="text-lg font-bold text-white">{daysToRace} days to go</p>
-          </div>
-          <p className="text-sm font-semibold text-accent">Goal {GOAL_TIME} →</p>
-        </Link>
+        <GoalCountdown />
       </div>
 
       <div className="mt-6 px-4">
