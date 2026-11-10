@@ -1,5 +1,6 @@
 "use client";
 
+import { postOrQueue } from "@/lib/outbox";
 import { useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import CoachingNote from "@/components/CoachingNote";
@@ -113,6 +114,7 @@ export default function RunsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Run | null>(null);
+  const [savedOffline, setSavedOffline] = useState<string | null>(null);
   const [recent, setRecent] = useState<Run[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [shoeOptions, setShoeOptions] = useState<{ shoes: string; miles: number }[]>([]);
@@ -249,6 +251,7 @@ export default function RunsPage() {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+    setSavedOffline(null);
     setFavoriteSaved(false);
     try {
       const payload: Record<string, unknown> = {
@@ -283,6 +286,26 @@ export default function RunsPage() {
       if (!editing || date !== localDateKey(new Date(editing.logged_at))) payload.logged_at = loggedAtFor(date);
 
       const wasReviewing = !!reviewing;
+      // A new run can wait on the phone without signal; edits and Garmin
+      // confirmations need the server there and then.
+      if (!reviewing && !editing) {
+        const result = await postOrQueue<{ run: Run }>("/api/runs", payload, {
+          kind: "run",
+          label: `Run · ${form.distance ? `${form.distance} mi` : runType || "entry"}`,
+        });
+        if (result.queued) {
+          setSavedOffline("Saved on this phone. It\u2019ll sync, with coaching, when you\u2019re back online.");
+          resetForm();
+          return;
+        }
+        if (!result.ok) throw new Error(result.error);
+        setLastSaved(result.data.run);
+        notifyDataChanged("run");
+        setTodayPlan(null);
+        resetForm();
+        loadRecent();
+        return;
+      }
       // Confirming writes the coaching, for the run type picked here.
       const res = await fetch(reviewing ? `/api/runs/${reviewing.run.id}/confirm` : editing ? `/api/runs/${editing.id}` : "/api/runs", {
         method: reviewing ? "POST" : editing ? "PATCH" : "POST",
@@ -617,6 +640,7 @@ export default function RunsPage() {
             : "Log Run"}
         </button>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+        {savedOffline && <p className="mt-2 text-sm text-fuel">{savedOffline}</p>}
       </form>
 
       {submitting && (!editing || reviewing) && <Spinner label="Claude is reviewing your run…" />}

@@ -4,6 +4,8 @@ import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 import GarminSync from "@/components/GarminSync";
 import ActiveWorkoutPill from "@/components/ActiveWorkoutPill";
+import OfflineBar from "@/components/OfflineBar";
+import ServiceWorker from "@/components/ServiceWorker";
 import AuthGuard from "@/components/AuthGuard";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
@@ -32,11 +34,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={inter.variable}>
       <body className="min-h-screen bg-base-950 text-ink font-sans">
         <div className="mx-auto flex min-h-screen max-w-lg flex-col">
+          <OfflineBar />
           <main className="flex-1 pb-24 pt-4">{children}</main>
           <AuthGuard />
           <ActiveWorkoutPill />
           <BottomNav />
           <GarminSync />
+          <ServiceWorker />
         </div>
       </body>
     </html>

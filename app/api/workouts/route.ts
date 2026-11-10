@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { parseWorkoutEntry } from "@/lib/anthropic";
+import { existingByClientId, isDuplicate, readClientId } from "@/lib/clientId";
 import { canonicalExerciseName } from "@/lib/exerciseNames";
 import type { Exercise } from "@/lib/types";
 import { buildWorkoutHistoryContext, recordExerciseMuscles } from "@/lib/workoutLog";
@@ -41,6 +42,9 @@ function exactExercises(raw: unknown): Exercise[] | null {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const clientId = readClientId(body);
+    const already = await existingByClientId("workouts", clientId);
+    if (already) return NextResponse.json({ workout: already }, { status: 200 });
     const text: string = body.text;
     if (!text || typeof text !== "string" || !text.trim()) {
       return NextResponse.json({ error: "Missing 'text' field." }, { status: 400 });
@@ -65,6 +69,7 @@ export async function POST(req: NextRequest) {
       .from("workouts")
       .insert({
         raw_text: text,
+        client_id: clientId,
         exercises,
         duration_minutes: duration,
         notes: parsed.notes,
@@ -82,6 +87,7 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
 
+    if (isDuplicate(error)) return NextResponse.json({ workout: await existingByClientId("workouts", clientId) }, { status: 200 });
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
