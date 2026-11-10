@@ -1,5 +1,6 @@
 import type { MuscleRegion } from "@/lib/muscles";
 import type { RunType } from "@/lib/types";
+import type { PaceZones } from "@/lib/paceZones";
 
 /** What a day's session asks for. */
 export type PlanDayKind = "lift" | "run" | "lift_and_run" | "active_recovery" | "rest";
@@ -106,6 +107,8 @@ export interface WeekPlan {
   sessions: PlanSession[];
   days: PlanDay[];
   weeks: PlanWeekMeta[];
+  /** Today's pace zones and HR caps (lib/paceZones.ts); absent on plans from before they existed. */
+  zones?: PaceZones;
   generatedAt: string;
 }
 

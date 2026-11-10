@@ -1,32 +1,19 @@
-import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
+import { DEFAULT_PACE_ZONES, type PaceRange, type PaceZones } from "@/lib/paceZones";
 import type { MuscleRegion } from "@/lib/muscles";
 import type { PlanExercise, PlanSession } from "@/lib/planner/types";
 import type { RunType } from "@/lib/types";
 
 // ── The run half of a planned session ─────────────────────────────────
 //
-// Target paces come from the fixed pace zones in code, never from the model,
-// so a plan can't drift off the 8:01 goal. The model names the run type and
+// Target paces come from the pace zones in code (lib/paceZones.ts: the race
+// goal and the athlete's own runs), never from the model. The model names the run type and
 // (optionally) its structure; older stored sessions without either are read
 // from the title.
 
-export interface PaceRange {
-  low: number; // fastest, s/mi
-  high: number; // slowest, s/mi
-}
+export type { PaceRange } from "@/lib/paceZones";
 
-export const PACE_ZONES: Record<RunType, PaceRange | null> = {
-  Easy: { low: 9 * 60 + 30, high: 10 * 60 + 30 },
-  Long: { low: 9 * 60, high: 9 * 60 + 30 },
-  "Marathon Pace": { low: GOAL_PACE_SECONDS_PER_MILE, high: GOAL_PACE_SECONDS_PER_MILE },
-  Tempo: { low: 7 * 60 + 20, high: 7 * 60 + 40 },
-  // Work reps run at threshold or quicker; recoveries are easy jogging.
-  Interval: { low: 7 * 60, high: 7 * 60 + 40 },
-  Race: { low: GOAL_PACE_SECONDS_PER_MILE, high: GOAL_PACE_SECONDS_PER_MILE },
-  Other: null,
-};
-
-const EASY = PACE_ZONES.Easy!;
+/** The fixed table (8:01 goal) — what a plan shows when no zones are passed. */
+export const PACE_ZONES: Record<RunType, PaceRange | null> = DEFAULT_PACE_ZONES.zones;
 
 export interface PlannedRun {
   type: RunType;
@@ -43,11 +30,12 @@ export interface PlannedRun {
   hrCap: number | null;
 }
 
-// From a highest recorded heart rate of 185 (Garmin, Jul–Oct 2026): easy
-// running stays under ~80% of max, long runs a little higher. Through Oct
-// 2026 almost all "easy" minutes were in Garmin zones 3–5.
-export const EASY_HR_CAP = 148;
-export const LONG_HR_CAP = 155;
+// Defaults from a highest recorded heart rate of 185 (Garmin, Jul 2026):
+// easy running stays under 80% of max, long runs under 84%. The live caps
+// come from the runs (lib/paceZones.ts). Through Oct 2026 almost all "easy"
+// minutes were in Garmin zones 3–5.
+export const EASY_HR_CAP = DEFAULT_PACE_ZONES.easyHrCap;
+export const LONG_HR_CAP = DEFAULT_PACE_ZONES.longHrCap;
 
 const RUN_TYPE_SET = new Set<string>(["Easy", "Long", "Tempo", "Marathon Pace", "Interval", "Race", "Other"]);
 
@@ -66,13 +54,13 @@ export function hasRun(session: PlanSession): boolean {
   return session.kind === "run" || session.kind === "lift_and_run";
 }
 
-export function plannedRunFor(session: PlanSession): PlannedRun | null {
+export function plannedRunFor(session: PlanSession, zones: PaceZones = DEFAULT_PACE_ZONES): PlannedRun | null {
   if (!hasRun(session)) return null;
   const stored = session.run;
   const type: RunType =
     stored?.type && RUN_TYPE_SET.has(stored.type) ? stored.type : inferRunType(`${session.title} ${stored?.structure ?? ""}`);
   const structure = stored?.structure?.trim() || null;
-  const pace = PACE_ZONES[type];
+  const pace = zones.zones[type];
   // Anything beyond an easy or long run, or with a written structure, has
   // easy running around the quality — show both paces.
   const repeats = /interval|repeat|\breps?\b|fartlek|\b\d+\s*[x×]\s*\d/i.test(session.title);
@@ -82,10 +70,10 @@ export function plannedRunFor(session: PlanSession): PlannedRun | null {
     type,
     miles: session.miles,
     pace,
-    easyPace: type === "Easy" || type === "Long" || steady ? null : EASY,
+    easyPace: type === "Easy" || type === "Long" || steady ? null : zones.zones.Easy,
     structure,
     steady,
-    hrCap: type === "Easy" ? EASY_HR_CAP : type === "Long" ? LONG_HR_CAP : null,
+    hrCap: type === "Easy" ? zones.easyHrCap : type === "Long" ? zones.longHrCap : null,
   };
 }
 
@@ -136,8 +124,8 @@ export function liftPrefill(session: PlanSession): string {
 }
 
 /** Query string that opens the Runs form filled in from the plan. */
-export function runPrefillQuery(session: PlanSession, date: string | null): string {
-  const run = plannedRunFor(session);
+export function runPrefillQuery(session: PlanSession, date: string | null, zones?: PaceZones): string {
+  const run = plannedRunFor(session, zones);
   if (!run) return "";
   const params = new URLSearchParams({ plan: "1", runType: run.type });
   if (run.miles) params.set("distance", String(run.miles));

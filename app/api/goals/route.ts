@@ -2,20 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { blockForWeek, nextRace } from "@/lib/goals";
 import { loadGoals, sanitizeGoal } from "@/lib/goalsStore";
+import { loadPaceZones } from "@/lib/paceZonesStore";
 import { localDateKey, startOfWeekSunday } from "@/lib/format";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Every goal, plus what this week is for and the next race, for the Goals tab and the countdown. */
-export async function GET() {
-  const goals = await loadGoals({ all: true });
+export async function GET(req: NextRequest) {
+  // The Goals tab also wants today's pace zones; the countdown doesn't.
+  const wantZones = req.nextUrl.searchParams.get("zones") === "1";
+  const [goals, zones] = await Promise.all([loadGoals({ all: true }), wantZones ? loadPaceZones() : null]);
   const today = localDateKey(new Date());
   const block = blockForWeek(goals, localDateKey(startOfWeekSunday(new Date())), today);
   return NextResponse.json({
     goals,
     nextRace: nextRace(goals, today),
     block: { kind: block.kind, summary: block.summary, goalId: block.goal?.id ?? null, race: block.race },
+    ...(zones ? { zones } : {}),
   });
 }
 

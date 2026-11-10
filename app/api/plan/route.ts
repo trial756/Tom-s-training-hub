@@ -13,6 +13,7 @@ import { fillGaps } from "@/lib/planner/gaps";
 import { isHard, validateWeek } from "@/lib/planner/validate";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
 import { loadGoals } from "@/lib/goalsStore";
+import { loadPaceZones } from "@/lib/paceZonesStore";
 import { blockForWeek } from "@/lib/goals";
 import { RUN_TYPES, type RunType } from "@/lib/types";
 
@@ -141,6 +142,8 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
       db.from("week_plans").select("week_start, sessions, assignments, headline").in("week_start", stripWeeks),
       loadGoals(),
     ]);
+    // Started now, awaited when the plan is assembled.
+    const zonesPromise = loadPaceZones(goals);
 
     const err = workoutsRes.error || runsRes.error || lookupRes.error || storedRes.error;
     if (err) return NextResponse.json({ error: err.message }, { status: 500 });
@@ -459,6 +462,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         .filter((d) => stripSet.has(d.date))
         .sort((a, b) => a.date.localeCompare(b.date)),
       weeks: results.map((r) => r.meta),
+      zones: await zonesPromise,
       generatedAt: new Date().toISOString(),
     };
 

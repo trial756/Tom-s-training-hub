@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
+import type { PaceZones } from "@/lib/paceZones";
+import { formatPaceRange } from "@/lib/planner/runPlan";
 import Spinner from "@/components/Spinner";
 import {
   buildMarathonPlan,
@@ -40,6 +42,16 @@ export default function MarathonPage() {
 
   const [runs, setRuns] = useState<Run[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(true);
+  const [zones, setZones] = useState<PaceZones | null>(null);
+
+  // Live zones (from the goal and the runs); the fixed table until they load.
+  useEffect(() => {
+    fetch("/api/goals?zones=1", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j?.zones && setZones(j.zones))
+      .catch(() => {});
+  }, []);
+  const paceTargets = zones ? paceTargetsFor(zones) : PACE_TARGETS;
   const [expandedPhases, setExpandedPhases] = useState<Set<PlanPhase>>(new Set(active ? [active.phase] : []));
   const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(new Set(active ? [active.weekNumber] : []));
 
@@ -235,7 +247,7 @@ export default function MarathonPage() {
               </tr>
             </thead>
             <tbody>
-              {PACE_TARGETS.map((p) => (
+              {paceTargets.map((p) => (
                 <tr key={p.zone} className="border-t border-base-800">
                   <td className="px-3 py-2 font-medium text-white">{p.zone}</td>
                   <td className="px-3 py-2 text-accent">{p.pace}</td>
@@ -391,4 +403,15 @@ function WeekRow({
       )}
     </div>
   );
+}
+
+function paceTargetsFor(z: PaceZones) {
+  const pace = (r: PaceZones["zones"]["Easy"]) => `${formatPaceRange(r)}/mi`;
+  return [
+    { zone: "Easy / Recovery", pace: pace(z.zones.Easy), purpose: `~80% of runs · HR under ${z.easyHrCap}` },
+    { zone: "Long Run", pace: pace(z.zones.Long), purpose: `Weekly long run · HR under ${z.longHrCap}` },
+    { zone: "Marathon Pace", pace: pace(z.zones["Marathon Pace"]), purpose: "MP segments" },
+    { zone: "Tempo / LT", pace: pace(z.zones.Tempo), purpose: "Threshold work" },
+    ...PACE_TARGETS.filter((p) => p.zone === "Strides"),
+  ];
 }

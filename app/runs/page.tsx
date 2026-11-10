@@ -156,8 +156,8 @@ export default function RunsPage() {
       if (!plan) return;
       const day = plan.days?.find((d) => d.date === plan.today);
       const session = day?.sessionId ? plan.sessions.find((s) => s.id === day.sessionId) : undefined;
-      const run = session ? plannedRunFor(session) : null;
-      if (session && run && !day?.loggedRun) setTodayPlan({ run, query: runPrefillQuery(session, null) });
+      const run = session ? plannedRunFor(session, plan.zones) : null;
+      if (session && run && !day?.loggedRun) setTodayPlan({ run, query: runPrefillQuery(session, null, plan.zones) });
     } catch {
       // The banner is a convenience; the form works without it.
     }
