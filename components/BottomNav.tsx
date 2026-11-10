@@ -9,7 +9,7 @@ const TABS = [
   { href: "/runs", label: "Runs", icon: RunIcon },
   { href: "/fuel", label: "Fuel", icon: FuelIcon },
   { href: "/history", label: "History", icon: HistoryIcon },
-  { href: "/marathon", label: "Marathon", icon: MarathonIcon },
+  { href: "/goals", label: "Goals", icon: MarathonIcon },
 ] as const;
 
 export default function BottomNav() {
@@ -20,7 +20,8 @@ export default function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-base-700 bg-base-950/95 backdrop-blur">
       <div className="mx-auto flex max-w-lg items-stretch justify-between px-1 pb-[calc(env(safe-area-inset-bottom)+4px)] pt-1">
         {TABS.map((tab) => {
-          const active = pathname === tab.href;
+          // The race page sits under Goals.
+          const active = pathname === tab.href || (tab.href === "/goals" && pathname === "/marathon");
           const Icon = tab.icon;
           return (
             <Link

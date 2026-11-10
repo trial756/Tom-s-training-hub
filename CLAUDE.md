@@ -101,7 +101,14 @@ One person's app, so no accounts: `middleware.ts` + `lib/deviceAuth.ts`. A passc
 - Expanded view: per-exercise sub-cards (name, sets×reps, weight, notes), Coach Feedback, **"vs Last Time" comparison**, Adjustments, Pattern note, delete
 - **Edit workout**: inline row editor (exercise name, per-set reps × weight, add/remove sets and exercises, date, notes) that saves exactly as typed with no AI call (`PATCH /api/workouts/[id]`); "Re-parse from text" re-runs the parser for bigger rewrites
 
-### Marathon
+### Goals (bottom-nav tab, `/goals`; replaced the Marathon tab)
+- "This week" card states what the current week is for (`blockForWeek` summary)
+- Races (upcoming, active), Focus, Past sections; each card shows date and days to go, priority (A Main / B Secondary / C For fun), distance, goal time and pace, notes, and "This week: …" when it drives the current week
+- Add / edit inline: name, date, distance chips (5K, 10K, Half, Marathon, or custom miles), goal time typed as digits (auto-colons), priority, focus, notes. Mark done / make active; delete uses the undo toast. `GET/POST /api/goals`, `PATCH/DELETE /api/goals/[id]` (`sanitizeGoal` validates)
+- A race with a hand-built plan links to it ("Race plan →" opens `/marathon`, still reachable and highlighted under Goals)
+- Today's countdown (`components/GoalCountdown.tsx`) follows the next active race, or the current focus when no race is ahead
+
+### Marathon (`/marathon`, reached from the Dallas goal)
 - Live countdown to race day
 - **Current Week/Phase card** — auto-calculated from today's date vs. race date (27 weeks back from Dec 13 2026 = program start). Shows week number, phase name, that week's focus sentence, and a progress bar comparing actual logged weekly mileage to that week's target.
 - Pace Targets table (see below)
