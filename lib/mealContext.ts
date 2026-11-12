@@ -3,6 +3,50 @@ import { APP_TIMEZONE, localDateKey, shiftDays } from "@/lib/format";
 import { plannedFor } from "@/lib/runReview";
 import { BODYWEIGHT_LB } from "@/lib/marathonPlan";
 import { correctionLines, foodLines, type Food, type MealCorrection } from "@/lib/foods";
+import { loadCalorieDay } from "@/lib/caloriesStore";
+import type { MealItem } from "@/lib/types";
+
+const hourOf = (iso: string) => Number(new Date(iso).toLocaleString("en-US", { timeZone: APP_TIMEZONE, hour: "numeric", hour12: false }));
+
+/** Average calories eaten after `hour` on previous logged days — what the rest of today probably holds. */
+function laterEating(meals: MealRow[], hour: number): { avg: number; days: number } | null {
+  const byDay = new Map<string, number>();
+  const daysSeen = new Set<string>();
+  for (const m of meals) {
+    const k = localDateKey(new Date(m.logged_at));
+    daysSeen.add(k);
+    if (hourOf(m.logged_at) >= hour) byDay.set(k, (byDay.get(k) ?? 0) + num(m.calories));
+  }
+  const days = Array.from(daysSeen).sort().slice(-14);
+  if (days.length < 3) return null;
+  return { avg: Math.round(days.reduce((s, d) => s + (byDay.get(d) ?? 0), 0) / days.length), days: days.length };
+}
+
+/** Swap material from his own log: lean high-protein items, and the heavy ones he eats often. */
+function leanOptions(meals: { items: MealItem[] | null }[], foods: Food[]): { lean: string[]; heavy: string[] } {
+  const seen = new Map<string, { name: string; cal: number; p: number; n: number }>();
+  const addItem = (name: string, cal: number | null, p: number | null) => {
+    if (!name || !cal || cal <= 0) return;
+    const k = name.toLowerCase().replace(/\(.*?\)/g, "").trim();
+    const cur = seen.get(k);
+    if (cur) cur.n++;
+    else seen.set(k, { name, cal: Math.round(cal), p: Math.round(p ?? 0), n: 1 });
+  };
+  for (const m of meals) for (const i of m.items ?? []) addItem(i.name, i.calories_est, i.protein_g);
+  for (const f of foods) addItem(f.name, f.calories, f.protein_g);
+  const all = Array.from(seen.values());
+  const lean = all
+    .filter((x) => x.p >= 20)
+    .sort((a, b) => b.p / b.cal - a.p / a.cal)
+    .slice(0, 6)
+    .map((x) => `- ${x.name}: ${x.cal} cal, ${x.p} g protein`);
+  const heavy = all
+    .filter((x) => x.cal >= 500)
+    .sort((a, b) => b.n - a.n || b.cal - a.cal)
+    .slice(0, 4)
+    .map((x) => `- ${x.name}: ${x.cal} cal${x.n > 1 ? ` (logged ${x.n}×)` : ""}`);
+  return { lean, heavy };
+}
 
 // ── The day around a meal ─────────────────────────────────────────────
 //
@@ -25,7 +69,7 @@ export async function buildMealDayContext(loggedAt: string): Promise<string> {
     const dayKey = localDateKey(at);
     const from = shiftDays(at, -8).toISOString();
     const to = shiftDays(at, 2).toISOString();
-    const [meals, runs, workouts, weight, planned, plannedTomorrow, foods, corrections, water] = await Promise.all([
+    const [meals, runs, workouts, weight, planned, plannedTomorrow, foods, corrections, water, calories, month] = await Promise.all([
       db.from("meals").select("logged_at, meal_type, summary, raw_text, calories, protein_g, carbs_g, fat_g").gte("logged_at", from).lt("logged_at", to).order("logged_at"),
       db.from("runs").select("logged_at, run_type, distance_miles, summary").gte("logged_at", shiftDays(at, -1).toISOString()).lt("logged_at", to),
       db.from("workouts").select("logged_at, summary").gte("logged_at", shiftDays(at, -1).toISOString()).lt("logged_at", to),
@@ -35,6 +79,8 @@ export async function buildMealDayContext(loggedAt: string): Promise<string> {
       db.from("foods").select("*").order("updated_at", { ascending: false }).limit(80),
       db.from("meal_corrections").select("before, after, created_at").order("created_at", { ascending: false }).limit(8),
       db.from("water_logs").select("logged_at, oz").gte("logged_at", shiftDays(at, -1).toISOString()).lte("logged_at", at.toISOString()),
+      loadCalorieDay(dayKey).catch(() => null),
+      db.from("meals").select("logged_at, items").gte("logged_at", shiftDays(at, -30).toISOString()).lt("logged_at", at.toISOString()),
     ]);
 
     const all = (meals.data ?? []) as MealRow[];
@@ -89,6 +135,28 @@ export async function buildMealDayContext(loggedAt: string): Promise<string> {
         `Last 7 days: meals logged on ${days.length} of 7 days (gaps are logging habits, not missed meals); on logged days about ${avg((d) => d.cal)} cal and ${avg((d) => d.p)} g protein.`
       );
     }
+
+    // The calorie target, and what the rest of the day usually adds.
+    if (calories) {
+      const t = calories.target;
+      const eatenBefore = Math.round(
+        earlier.reduce((s, m) => s + num(m.calories), 0)
+      );
+      lines.push(
+        "",
+        `Calorie target today: ${t.target} (${t.mode}: ${t.reason} Maintenance ${t.maintenance} = baseline ${t.baseline}` +
+          `${t.baselineSource === "estimate" ? " (estimated from bodyweight; refined as weigh-ins and logged days build up)" : " (measured from his log and weigh-ins)"}` +
+          ` + training ${t.training}; adjustment ${t.adjustment >= 0 ? "+" : ""}${t.adjustment}).`,
+        `Goal: about ${calories.goalLb} lb while adding muscle; weight trend now ${calories.trendLb} lb.`,
+        `Eaten before this meal: ${eatenBefore} cal — ${t.target - eatenBefore} left before this meal is counted.`
+      );
+      const hourNow = hourOf(loggedAt);
+      const later = laterEating(all.filter((m) => localDateKey(new Date(m.logged_at)) < dayKey), hourNow);
+      if (later) lines.push(`On his logged days, he usually eats about ${later.avg} more cal after this time of day (${later.days} days).`);
+    }
+    const options = leanOptions((month.data ?? []) as { items: MealItem[] | null }[], (foods.data ?? []) as Food[]);
+    if (options.lean.length) lines.push("", "Lean, high-protein things he has eaten (for swaps):", ...options.lean);
+    if (options.heavy.length) lines.push("Heavy regulars in his log:", ...options.heavy);
 
     // What Tom has taught it: his foods, and the mistakes it made before.
     const library = foodLines((foods.data ?? []) as Food[]);

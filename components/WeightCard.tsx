@@ -77,6 +77,7 @@ export default function WeightCard() {
         <p className="text-xs uppercase tracking-wide text-gray-400">Body weight</p>
         {latest && <p className="text-xs text-muted">Trend {lb(latest.trend)} lb</p>}
       </div>
+      <GoalRow trendLb={latest?.trend ?? null} />
 
       {latest && (
         <div className="grid grid-cols-3 gap-2">
@@ -199,5 +200,51 @@ function WeightChart({ points }: { points: { date: string; weight_lb: number; tr
         <circle key={p.date} cx={x(p.date)} cy={y(p.weight_lb)} r={2.5} fill="#f5f5f5" />
       ))}
     </svg>
+  );
+}
+
+/** The goal weight, editable in place. It sets the calorie target's direction (lib/calories.ts). */
+function GoalRow({ trendLb }: { trendLb: number | null }) {
+  const [goal, setGoal] = useState<number | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/calories", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j?.goalLb && setGoal(j.goalLb))
+      .catch(() => {});
+  }, []);
+  if (goal == null) return null;
+
+  async function save() {
+    const v = Number(editing);
+    if (!Number.isFinite(v) || v < 80 || v > 400) return;
+    await fetch("/api/calories", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ goal_lb: v }) });
+    setGoal(v);
+    setEditing(null);
+    notifyDataChanged("weight");
+  }
+
+  const toGo = trendLb == null ? null : trendLb - goal;
+  return editing != null ? (
+    <div className="flex gap-2">
+      <input
+        autoFocus
+        className="input-field min-h-[44px] flex-1"
+        inputMode="decimal"
+        value={editing}
+        onChange={(e) => setEditing(e.target.value.replace(/[^\d.]/g, ""))}
+        onKeyDown={(e) => e.key === "Enter" && save()}
+      />
+      <button type="button" className="btn-primary min-h-[44px] px-4 text-sm" onClick={save}>
+        Save
+      </button>
+    </div>
+  ) : (
+    <button type="button" className="flex min-h-[44px] w-full items-center justify-between rounded-lg bg-base-800 px-3 text-left" onClick={() => setEditing(String(goal))}>
+      <span className="text-sm text-ink">Goal {lb(goal)} lb</span>
+      <span className="text-xs text-muted">
+        {toGo == null ? "" : toGo > 0.5 ? `${lb(toGo)} lb to go · edit` : toGo < -0.5 ? `${lb(-toGo)} lb under · edit` : "at goal · edit"}
+      </span>
+    </button>
   );
 }

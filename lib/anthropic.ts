@@ -500,10 +500,16 @@ const mealSchema = {
     coaching_feedback: {
       type: "string",
       description:
-        "1-2 sentences on the athlete's nutrition for the day as a whole, using the day so far: where protein and " +
-        "energy stand against the day's needs, and one concrete next step for later meals. Never suggest adding a " +
+        "2-3 sentences on the day's nutrition as a whole, using the day so far and the calorie target. " +
+        "If the day is over its calorie target with this meal, or this meal plus what he usually eats later puts it " +
+        "over: give a firm, reasoned warning — the numbers (eaten, target, how far over or projected over) and why it " +
+        "matters (his goal of about 155 lb while keeping muscle, or fuelling the race in race season) — then ONE " +
+        "concrete fix for the rest of the day built from foods in his own log (a named swap or portion, with its " +
+        "calories and protein). Never write vague lines like 'you're almost at your limit', 'be mindful' or 'watch " +
+        "your intake'. If he's comfortably under, say so in a clause and, if protein is short, name a lean food from " +
+        "his log to close it. A little wit is welcome; no shaming and no words about his body. Never suggest adding a " +
         "food already eaten today. Mention training only when it matters for this meal (fuel before a long or hard " +
-        "session, recovery after one); otherwise talk about the day's eating, not running.",
+        "session, recovery after one).",
     },
   },
   required: ["meal_type", "items", "calories", "protein_g", "carbs_g", "fat_g", "summary", "notes", "coaching_feedback"],
