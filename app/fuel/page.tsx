@@ -3,6 +3,7 @@
 import { postOrQueue } from "@/lib/outbox";
 import MealEditor from "@/components/MealEditor";
 import FoodLibrary from "@/components/FoodLibrary";
+import CalorieBar from "@/components/CalorieBar";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { resizeImage } from "@/lib/imageResize";
 import PageHeader from "@/components/PageHeader";
@@ -360,6 +361,9 @@ export default function FuelPage() {
       )}
 
       <div className="mt-6 px-4">
+        <div className="mb-3">
+          <CalorieBar />
+        </div>
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Today's Macros</h2>
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="card py-3">
