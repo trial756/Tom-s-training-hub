@@ -1,3 +1,6 @@
 {
-  "crons": [{ "path": "/api/garmin/sync", "schedule": "17 11 * * *" }]
+  "crons": [
+    { "path": "/api/garmin/sync", "schedule": "17 11 * * *" },
+    { "path": "/api/water/remind", "schedule": "0 23 * * *" }
+  ]
 }

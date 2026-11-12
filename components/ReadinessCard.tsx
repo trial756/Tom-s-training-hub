@@ -40,7 +40,7 @@ export default function ReadinessCard({ hardToday }: { hardToday: string | null 
   const load = useCallback(() => {
     fetch("/api/readiness", { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => (j.error ? setError(j.error) : setData(j)))
+      .then((j) => (j?.readiness ? setData(j) : j?.error && setError(j.error)))
       .catch(() => {});
   }, []);
   useEffect(load, [load]);

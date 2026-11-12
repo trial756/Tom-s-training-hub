@@ -10,6 +10,7 @@ import { localDateKey } from "@/lib/format";
 import type { WeekPlan } from "@/lib/planner/types";
 import { useRefreshOn } from "@/lib/refresh";
 import ReadinessCard from "@/components/ReadinessCard";
+import WaterCard from "@/components/WaterCard";
 import { plannedRunFor } from "@/lib/planner/runPlan";
 
 const KEY_RUNS = new Set(["Long", "Tempo", "Marathon Pace", "Interval", "Race"]);
@@ -158,8 +159,9 @@ export default function TodayPage() {
     <div>
       <PageHeader title="Today" subtitle="Your plan for the week." />
 
-      <div className="mb-4 px-4">
+      <div className="mb-4 space-y-4 px-4">
         <ReadinessCard hardToday={hardToday} />
+        <WaterCard />
       </div>
 
       {planLoading ? (
