@@ -11,6 +11,7 @@ import type { Exercise } from "@/lib/types";
 export interface ActiveSet {
   /** Kept as typed so a half-entered number isn't mangled. */
   weight: string;
+  /** Reps — or, for a timed exercise, seconds held (per side when it has two). */
   reps: string;
   done: boolean;
 }
@@ -23,7 +24,22 @@ export interface ActiveExercise {
   note: string | null;
   cue: string | null;
   restSec: number;
+  /** A hold (plank, wall sit): sets are seconds and get a countdown, not reps. */
+  timed?: boolean;
+  /** Done on each side (side plank, Copenhagen): the countdown runs twice with a switch between. */
+  sides?: 1 | 2;
   sets: ActiveSet[];
+}
+
+/** A hold in progress. `switchUntil` is the pause to change sides before side two starts. */
+export interface ActiveHold {
+  exId: string;
+  set: number;
+  side: 1 | 2;
+  sides: 1 | 2;
+  seconds: number;
+  endsAt: number;
+  switchUntil: number | null;
 }
 
 export interface ActiveWorkout {
@@ -36,6 +52,7 @@ export interface ActiveWorkout {
   /** When the running rest ends (epoch ms), so a backgrounded phone still counts it down. */
   restEndsAt: number | null;
   restTotal: number | null;
+  hold?: ActiveHold | null;
 }
 
 export const STORAGE_KEY = "tth-active-workout";
@@ -62,9 +79,32 @@ export function restFor(reps: string, name = ""): number {
   return 60;
 }
 
+const TIMED_NAME = /plank|wall sit|dead hang|\bhold\b|l-sit|hollow body|isometric/i;
+const TIMED_REPS = /\d\s*(s|sec|secs|seconds?|min|mins|minutes?)\b/i;
+const TWO_SIDED = /per side|each side|\/\s*side|each leg|per leg|side plank|copenhagen|single[- ](arm|leg)|suitcase/i;
+
+/** Holds are timed: by the prescription ("30-40s") or, with nothing to go on, by the movement. */
+export function isTimed(reps: string, name: string): boolean {
+  if (TIMED_REPS.test(reps)) return true;
+  // A hold written as plain reps ("3 x 10") is reps; otherwise the movement decides.
+  return TIMED_NAME.test(name) && !/^\s*\d+(\s*-\s*\d+)?\s*(reps?)?\s*$/i.test(reps);
+}
+
+export function sidesFor(reps: string, name: string): 1 | 2 {
+  return TWO_SIDED.test(`${name} ${reps}`) ? 2 : 1;
+}
+
+/** Seconds from "30-40s", "1 min", "45 sec" — the low end of a range. */
+export function holdSeconds(reps: string): string {
+  const n = Number(firstNumber(reps));
+  if (!n) return "";
+  return String(/min/i.test(reps) ? n * 60 : n);
+}
+
 function fromPlanExercise(e: PlanExercise): ActiveExercise {
+  const timed = isTimed(e.reps, e.name);
   const weight = firstNumber(e.target);
-  const reps = firstNumber(e.reps);
+  const reps = timed ? holdSeconds(e.reps) : firstNumber(e.reps);
   const count = Math.max(1, Math.min(10, Number(e.sets) || 3));
   return {
     id: uid(),
@@ -72,7 +112,9 @@ function fromPlanExercise(e: PlanExercise): ActiveExercise {
     target: `${e.sets} × ${e.reps}${e.target ? ` @ ${e.target}` : ""}`,
     note: e.note ?? null,
     cue: e.isNew ? e.cue : null,
-    restSec: restFor(e.reps, e.name),
+    restSec: timed ? 45 : restFor(e.reps, e.name),
+    timed,
+    sides: sidesFor(e.reps, e.name),
     sets: Array.from({ length: count }, () => ({ weight, reps, done: false })),
   };
 }
@@ -94,7 +136,18 @@ export function emptyWorkout(date: string): ActiveWorkout {
 }
 
 export function newExercise(name: string): ActiveExercise {
-  return { id: uid(), name: name.trim(), target: null, note: null, cue: null, restSec: 90, sets: [{ weight: "", reps: "", done: false }] };
+  const timed = isTimed("", name);
+  return {
+    id: uid(),
+    name: name.trim(),
+    target: null,
+    note: null,
+    cue: null,
+    restSec: timed ? 45 : 90,
+    timed,
+    sides: sidesFor("", name),
+    sets: [{ weight: "", reps: timed ? "30" : "", done: false }],
+  };
 }
 
 export function loadActiveWorkout(): ActiveWorkout | null {
@@ -124,7 +177,7 @@ const num = (s: string) => {
 };
 
 /** The ticked sets, as the workout log stores them. Exercises with nothing ticked are left out. */
-export function completedExercises(w: ActiveWorkout): Exercise[] {
+export function completedExercises(w: ActiveWorkout): (Exercise & { timed: boolean; sides: 1 | 2 })[] {
   return w.exercises
     .map((e) => ({
       name: e.name,
@@ -132,8 +185,11 @@ export function completedExercises(w: ActiveWorkout): Exercise[] {
         .filter((s) => s.done)
         .map((s) => {
           const weight = num(s.weight);
+          if (e.timed) return { reps: null, weight: weight || null, weight_unit: weight ? "lb" : null, seconds: num(s.reps) };
           return { reps: num(s.reps), weight: weight || null, weight_unit: weight ? "lb" : null };
         }),
+      timed: !!e.timed,
+      sides: e.sides ?? 1,
     }))
     .filter((e) => e.name && e.sets.length > 0);
 }
@@ -141,8 +197,16 @@ export function completedExercises(w: ActiveWorkout): Exercise[] {
 /** "Back Squat: 185x5, 185x5, 185x4" per line — what the parser and History show as the raw log. */
 export function workoutText(w: ActiveWorkout, notes = ""): string {
   const lines = completedExercises(w).map((e) => {
-    const sets = e.sets.map((s) => (s.weight ? `${s.weight}x${s.reps ?? "?"}` : `${s.reps ?? "?"} reps`)).join(", ");
-    return `${e.name}: ${sets}`;
+    const sets = e.sets
+      .map((s) =>
+        e.timed
+          ? `${s.weight ? `${s.weight} lb ` : ""}${s.seconds ?? "?"}s`
+          : s.weight
+            ? `${s.weight}x${s.reps ?? "?"}`
+            : `${s.reps ?? "?"} reps`
+      )
+      .join(", ");
+    return `${e.name}${e.timed && e.sides === 2 ? " (each side)" : ""}: ${sets}`;
   });
   return [w.title, ...lines, notes.trim()].filter(Boolean).join("\n");
 }

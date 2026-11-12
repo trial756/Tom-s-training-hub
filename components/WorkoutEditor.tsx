@@ -8,6 +8,8 @@ interface SetRow {
   reps: string;
   weight: string;
   unit: string | null;
+  /** A timed hold's seconds, carried through an edit unchanged. */
+  seconds?: number | null;
 }
 interface ExerciseRow {
   name: string;
@@ -39,6 +41,7 @@ export default function WorkoutEditor({
         reps: str(s.reps),
         weight: str(s.weight),
         unit: s.weight_unit,
+        seconds: s.seconds ?? null,
       })),
     }))
   );
@@ -80,7 +83,7 @@ export default function WorkoutEditor({
       notes,
       exercises: rows.map((r) => ({
         name: r.name,
-        sets: r.sets.map((s) => ({ reps: s.reps, weight: s.weight, weight_unit: s.unit ?? (s.weight ? "lb" : null) })),
+        sets: r.sets.map((s) => ({ reps: s.reps, weight: s.weight, weight_unit: s.unit ?? (s.weight ? "lb" : null), seconds: s.seconds ?? null })),
       })),
     });
 

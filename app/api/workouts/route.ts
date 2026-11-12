@@ -3,6 +3,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { parseWorkoutEntry } from "@/lib/anthropic";
 import { existingByClientId, isDuplicate, readClientId } from "@/lib/clientId";
 import { canonicalExerciseName } from "@/lib/exerciseNames";
+import { localDateKey } from "@/lib/format";
+import { plannedFor, type PlannedForDay } from "@/lib/runReview";
 import type { Exercise } from "@/lib/types";
 import { buildWorkoutHistoryContext, recordExerciseMuscles } from "@/lib/workoutLog";
 
@@ -22,6 +24,20 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ workouts: data });
 }
 
+/**
+ * What the plan prescribed that day, so coaching judges the log against it:
+ * Nov 11 2026's calf raises were planned without a weight, then flagged for
+ * having no load.
+ */
+function planContextFor(planned: PlannedForDay | null): string {
+  const s = planned?.session;
+  if (!s?.exercises.length) return "";
+  const lines = s.exercises.map(
+    (e) => `- ${e.name}: ${e.sets} × ${e.reps}${e.target ? ` @ ${e.target}` : " (no load prescribed — bodyweight or the athlete's choice)"}`
+  );
+  return `The plan for this day was "${s.title}". It prescribed:\n${lines.join("\n")}`;
+}
+
 function exactExercises(raw: unknown): Exercise[] | null {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > 40) return null;
   const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 2000 ? v : null);
@@ -30,9 +46,10 @@ function exactExercises(raw: unknown): Exercise[] | null {
     if (typeof e?.name !== "string" || !e.name.trim() || !Array.isArray(e.sets)) return null;
     out.push({
       name: canonicalExerciseName(e.name.trim().slice(0, 80)),
-      sets: (e.sets as { reps?: unknown; weight?: unknown }[]).slice(0, 30).map((st) => {
+      sets: (e.sets as { reps?: unknown; weight?: unknown; seconds?: unknown }[]).slice(0, 30).map((st) => {
         const weight = n(st?.weight);
-        return { reps: n(st?.reps), weight, weight_unit: weight ? "lb" : null };
+        const seconds = n(st?.seconds);
+        return { reps: n(st?.reps), weight, weight_unit: weight ? "lb" : null, ...(seconds ? { seconds } : {}) };
       }),
     });
   }
@@ -50,8 +67,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing 'text' field." }, { status: 400 });
     }
 
-    const historyContext = await buildWorkoutHistoryContext();
-    const parsed = await parseWorkoutEntry(text, historyContext);
+    const loggedAt: string = typeof body.logged_at === "string" ? body.logged_at : new Date().toISOString();
+    const [historyContext, planned] = await Promise.all([
+      buildWorkoutHistoryContext(),
+      plannedFor(localDateKey(new Date(loggedAt))).catch(() => null),
+    ]);
+    const parsed = await parseWorkoutEntry(text, historyContext, planContextFor(planned));
 
     // Muscle tags live in the exercise_muscles lookup, not on the workout
     // row — storing them per session would let the same movement drift into
@@ -82,7 +103,7 @@ export async function POST(req: NextRequest) {
         calories_burned_est: parsed.calories_burned_est,
         summary: parsed.summary,
         weekly_note: parsed.weekly_note,
-        logged_at: body.logged_at ?? new Date().toISOString(),
+        logged_at: loggedAt,
       })
       .select()
       .single();

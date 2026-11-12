@@ -16,6 +16,8 @@ import { sanitizeIntervals } from "@/lib/intervals";
 export interface PlannedForDay {
   title: string;
   run: PlannedRun | null;
+  /** The whole planned session, for coaching that judges a log against what was prescribed. */
+  session?: PlanSession;
 }
 
 /** What the plan had on a given day, if anything. */
@@ -31,7 +33,7 @@ export async function plannedFor(dateKey: string): Promise<PlannedForDay | null>
     for (const [sessionId, date] of Object.entries((row.assignments ?? {}) as Record<string, string>)) {
       if (date !== dateKey) continue;
       const session = sessions.find((s) => s.id === sessionId);
-      if (session) return { title: session.title, run: plannedRunFor(session, await loadPaceZones()) };
+      if (session) return { title: session.title, run: plannedRunFor(session, await loadPaceZones()), session };
     }
   }
   return null;

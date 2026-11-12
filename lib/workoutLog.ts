@@ -35,7 +35,7 @@ export async function recordExerciseMuscles(parsed: ParsedWorkout) {
 
 function summarizeExercises(exercises: Exercise[]): string {
   return (exercises ?? [])
-    .map((e) => `${e.name}: ${(e.sets ?? []).map((s) => `${s.weight ?? "?"}${s.weight_unit ?? ""}x${s.reps ?? "?"}`).join(",")}`)
+    .map((e) => `${e.name}: ${(e.sets ?? []).map((s) => (s.seconds ? `${s.seconds}s hold` : `${s.weight ?? "?"}${s.weight_unit ?? ""}x${s.reps ?? "?"}`)).join(",")}`)
     .join(" | ");
 }
 
@@ -72,14 +72,16 @@ export function sanitizeExercises(raw: unknown): Exercise[] {
       const name = typeof ex.name === "string" ? ex.name.trim() : "";
       const sets: ExerciseSet[] = (Array.isArray(ex.sets) ? ex.sets : [])
         .map((s) => {
-          const set = (s ?? {}) as { reps?: unknown; weight?: unknown; weight_unit?: unknown };
+          const set = (s ?? {}) as { reps?: unknown; weight?: unknown; weight_unit?: unknown; seconds?: unknown };
+          const seconds = num(set.seconds);
           return {
             reps: num(set.reps),
             weight: num(set.weight),
             weight_unit: typeof set.weight_unit === "string" && set.weight_unit.trim() ? set.weight_unit.trim() : null,
+            ...(seconds ? { seconds } : {}),
           };
         })
-        .filter((s) => s.reps != null || s.weight != null);
+        .filter((s) => s.reps != null || s.weight != null || s.seconds != null);
       return { name, sets };
     })
     .filter((e) => e.name);

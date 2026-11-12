@@ -150,6 +150,21 @@ export function applyStrengthRules(input: PlanSession[], ctx: Context): PlanSess
 
       rows.sort((a, b) => tier(a.pattern, a.role) - tier(b.pattern, b.role));
       session.exercises = rows.map((r) => r.ex);
+    } else {
+      // A run day's add-on work (calves, hips, core) still gets loads from
+      // the log: Nov 11 2026 planned calf raises with no weight on an easy-run
+      // day although the last session was 135x10.
+      for (const ex of session.exercises) {
+        const pattern = patternOf(ex.name);
+        const role = roleFromReps(ex.reps, pattern);
+        const trend = findTrend(ctx.trends, ex.name);
+        if (!trend || !role || ex.target) continue;
+        const rx = prescribe(trend, role, { fatigued: ctx.fatigued });
+        if (!rx || rx.target <= 0) continue;
+        ex.reps = rx.reps;
+        ex.target = `${rx.target} lb`;
+        ex.note = ex.note ? `${ex.note}; ${rx.basis}` : rx.basis;
+      }
     }
 
     // "New" only for movements never logged; the form cue goes with it.
