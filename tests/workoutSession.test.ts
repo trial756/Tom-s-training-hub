@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { completedExercises, firstNumber, restFor, workoutFromSession, workoutText } from "../lib/workoutSession";
 import type { PlanSession } from "../lib/planner/types";
+import { liftTitleFor } from "../lib/planner/runPlan";
 
 const session: PlanSession = {
   id: "s1",
@@ -57,4 +58,36 @@ test("rest scales with how heavy the work is", () => {
   assert.equal(restFor("30s", "Side Plank"), 45);
   assert.equal(firstNumber("135.5 lb"), "135.5");
   assert.equal(firstNumber(null), "");
+});
+
+// Nov 11 2026: side planks and Copenhagen planks were logged as "30 reps".
+test("holds are timed: seconds, each side where it applies, logged as seconds", () => {
+  const holds: PlanSession = {
+    ...session,
+    exercises: [
+      { name: "Side Plank", sets: 3, reps: "30-40s per side", target: null, cue: null, isNew: false, regions: [] },
+      { name: "Copenhagen Plank", sets: 2, reps: "20-30s per side", target: null, cue: null, isNew: false, regions: [] },
+      { name: "Plank", sets: 2, reps: "1 min", target: null, cue: null, isNew: false, regions: [] },
+      { name: "Standing Calf Raise", sets: 3, reps: "12-15", target: "135 lb", cue: null, isNew: false, regions: [] },
+    ],
+  };
+  const w = workoutFromSession(holds, "2026-11-11", "Core & hips");
+  const [side, cph, plank, calf] = w.exercises;
+  assert.deepEqual([side.timed, side.sides, side.sets[0].reps], [true, 2, "30"]);
+  assert.deepEqual([cph.timed, cph.sides, cph.sets[0].reps], [true, 2, "20"]);
+  assert.deepEqual([plank.timed, plank.sides, plank.sets[0].reps], [true, 1, "60"]);
+  assert.equal(calf.timed, false);
+  side.sets[0].done = true;
+  side.sets[1] = { weight: "", reps: "35", done: true };
+  calf.sets[0].done = true;
+  const ex = completedExercises(w);
+  assert.deepEqual(ex[0].sets, [
+    { reps: null, weight: null, weight_unit: null, seconds: 30 },
+    { reps: null, weight: null, weight_unit: null, seconds: 35 },
+  ]);
+  assert.equal(workoutText(w), "Core & hips\nSide Plank (each side): 30s, 35s\nStanding Calf Raise: 135x12");
+});
+
+test("a run day's lift title leaves the miles to the run", () => {
+  assert.equal(liftTitleFor({ ...session, kind: "run", title: "Easy run + core & hips 8mi" }), "core & hips");
 });

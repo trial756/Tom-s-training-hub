@@ -259,7 +259,7 @@ const workoutSchema = {
   additionalProperties: false,
 };
 
-export async function parseWorkoutEntry(text: string, historyContext: string): Promise<ParsedWorkout> {
+export async function parseWorkoutEntry(text: string, historyContext: string, planContext = ""): Promise<ParsedWorkout> {
   const parsed = await parseWithTool<ParsedWorkout>({
     system:
       "You are a strength-training coach parsing a natural-language workout log into structured data. " +
@@ -280,7 +280,12 @@ export async function parseWorkoutEntry(text: string, historyContext: string): P
       todayContext(),
     userText:
       `New workout entry to parse:\n"${text}"\n\n` +
-      `Recent workout history for comparison (most recent first):\n${historyContext || "No prior workouts logged yet."}`,
+      `Recent workout history for comparison (most recent first):\n${historyContext || "No prior workouts logged yet."}` +
+      (planContext
+        ? `\n\n${planContext}\n\nJudge the session against this prescription. An exercise prescribed with no load was ` +
+          `done as intended at bodyweight: don't flag the missing weight or ask for load next time unless you say the plan ` +
+          `should add it and why. Times like "30s" are seconds held, not reps.`
+        : ""),
     toolName: "record_workout",
     toolDescription: "Records a structured, parsed weightlifting/strength workout with 3-part coaching feedback.",
     inputSchema: workoutSchema,

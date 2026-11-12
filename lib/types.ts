@@ -2,6 +2,8 @@ export interface ExerciseSet {
   reps: number | null;
   weight: number | null;
   weight_unit: string | null;
+  /** Timed holds (planks, carries): seconds held, per side when the exercise is done each side. */
+  seconds?: number | null;
 }
 
 export interface Exercise {

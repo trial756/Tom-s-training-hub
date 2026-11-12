@@ -98,7 +98,11 @@ const RUN_WORDS = /\b(run|runs|mi|miles?|easy|long|tempo|mp|marathon|interval|in
 /** Title of the lift (or mobility block) part of a session — "MP intervals + Pull & rear delts" → "Pull & rear delts". */
 export function liftTitleFor(session: PlanSession): string {
   if (!hasRun(session)) return session.title;
-  const parts = session.title.split(/\s+\+\s+|\s+&\s+(?=[A-Z])|\s+with\s+/);
+  // Miles belong to the run: "Easy run + core & hips 8mi" is "core & hips" (Nov 11 2026).
+  const parts = session.title
+    .split(/\s+\+\s+|\s+&\s+(?=[A-Z])|\s+with\s+/)
+    .map((p) => p.replace(/\s*\d+(\.\d+)?\s*mi\b/gi, "").trim())
+    .filter(Boolean);
   const lift = parts.filter((p) => !RUN_WORDS.test(p));
   if (lift.length) return lift.join(" + ");
   return session.kind === "lift_and_run" ? "Lift" : "Mobility + core";

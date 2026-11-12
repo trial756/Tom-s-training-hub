@@ -19,6 +19,9 @@ import {
   type ActiveWorkout,
 } from "@/lib/workoutSession";
 
+/** Time to change sides between the two halves of a two-sided hold. */
+const SWITCH_MS = 5000;
+
 const clock = (sec: number) => {
   const s = Math.max(0, Math.round(sec));
   const h = Math.floor(s / 3600);
@@ -83,25 +86,75 @@ export default function WorkoutPage() {
 
   const restLeft = w?.restEndsAt ? (w.restEndsAt - now) / 1000 : null;
 
-  // Rest over: buzz and beep once, then clear the timer.
-  useEffect(() => {
-    if (restLeft == null || restLeft > 0) return;
+  /**
+   * The alert: three square-wave pips (a square wave carries far more than the
+   * old soft sine, Nov 2026: "the ding could be louder") plus a buzz. `short`
+   * is one pip, for "switch sides".
+   */
+  const chime = useCallback((short = false) => {
     try {
-      navigator.vibrate?.([200, 100, 200]);
+      navigator.vibrate?.(short ? 150 : [250, 120, 250, 120, 250]);
     } catch {}
     const ctx = audio.current;
-    if (ctx) {
+    if (!ctx) return;
+    if (ctx.state === "suspended") void ctx.resume();
+    const pips = short ? [{ at: 0, f: 1320 }] : [{ at: 0, f: 880 }, { at: 0.22, f: 880 }, { at: 0.44, f: 1320 }];
+    for (const { at, f } of pips) {
+      const t0 = ctx.currentTime + at;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.25, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+      osc.type = "square";
+      osc.frequency.value = f;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.6, t0 + 0.01);
+      gain.gain.setValueAtTime(0.6, t0 + 0.14);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
       osc.connect(gain).connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.6);
+      osc.start(t0);
+      osc.stop(t0 + 0.2);
     }
+  }, []);
+
+  // Rest over: chime once, then clear the timer.
+  useEffect(() => {
+    if (restLeft == null || restLeft > 0) return;
+    chime();
     update((x) => ({ ...x, restEndsAt: null, restTotal: null }));
-  }, [restLeft, update]);
+  }, [restLeft, update, chime]);
+
+  // A hold: count down, switch sides when there are two, then tick the set and start the rest.
+  const hold = w?.hold ?? null;
+  const switching = hold?.switchUntil != null && now < hold.switchUntil;
+  const holdLeft = hold ? (switching ? (hold.switchUntil! - now) / 1000 : (hold.endsAt - now) / 1000) : null;
+  useEffect(() => {
+    if (!hold) return;
+    if (hold.switchUntil != null && now >= hold.switchUntil) {
+      chime(true); // go
+      update((x) => (x.hold ? { ...x, hold: { ...x.hold, switchUntil: null } } : x));
+      return;
+    }
+    if (now < hold.endsAt) return;
+    chime();
+    if (hold.side === 1 && hold.sides === 2) {
+      const t = Date.now();
+      update((x) => (x.hold ? { ...x, hold: { ...x.hold, side: 2, switchUntil: t + SWITCH_MS, endsAt: t + SWITCH_MS + x.hold.seconds * 1000 } } : x));
+      return;
+    }
+    update((x) => {
+      const ex = x.exercises.find((e) => e.id === hold.exId);
+      const totalSets = x.exercises.reduce((n, e) => n + e.sets.length, 0);
+      const doneSets = x.exercises.reduce((n, e) => n + e.sets.filter((st) => st.done).length, 0);
+      const last = doneSets + 1 >= totalSets;
+      return {
+        ...x,
+        hold: null,
+        exercises: x.exercises.map((e) =>
+          e.id === hold.exId ? { ...e, sets: e.sets.map((st, j) => (j === hold.set ? { ...st, done: true } : st)) } : e
+        ),
+        ...(ex && !last ? { restEndsAt: Date.now() + ex.restSec * 1000, restTotal: ex.restSec } : {}),
+      };
+    });
+  }, [hold, now, update, chime]);
 
   if (!w) return null;
 
@@ -124,14 +177,32 @@ export default function WorkoutPage() {
     }));
   }
 
+  // The first tap is the gesture that lets the page make a sound later.
+  function ensureAudio() {
+    if (audio.current) return;
+    try {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      audio.current = new Ctx();
+    } catch {}
+  }
+
+  function startHold(exId: string, i: number) {
+    ensureAudio();
+    update((x) => {
+      const ex = x.exercises.find((e) => e.id === exId)!;
+      const seconds = Number(ex.sets[i].reps) || 30;
+      const t = Date.now();
+      return {
+        ...x,
+        restEndsAt: null,
+        restTotal: null,
+        hold: { exId, set: i, side: 1, sides: ex.sides ?? 1, seconds, endsAt: t + seconds * 1000, switchUntil: null },
+      };
+    });
+  }
+
   function toggleSet(exId: string, i: number) {
-    // The first tap is the gesture that lets the page make a sound later.
-    if (!audio.current) {
-      try {
-        const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        audio.current = new Ctx();
-      } catch {}
-    }
+    ensureAudio();
     update((x) => {
       const ex = x.exercises.find((e) => e.id === exId)!;
       const wasDone = ex.sets[i].done;
@@ -227,7 +298,7 @@ export default function WorkoutPage() {
   }
 
   return (
-    <div className={`px-4 ${w.restEndsAt ? "pb-28" : ""}`}>
+    <div className={`px-4 ${w.restEndsAt || hold ? "pb-28" : ""}`}>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-bold text-ink">{w.title}</h1>
@@ -252,7 +323,46 @@ export default function WorkoutPage() {
                 {e.cue && <p className="text-xs text-faint">New: {e.cue}</p>}
               </div>
               <div className="space-y-1.5">
-                {e.sets.map((s, i) => (
+                {e.timed && (
+                  <p className="text-xs text-muted">
+                    Hold in seconds{e.sides === 2 ? " — each side; the timer runs both with a 5-second switch" : ""}. Tap ▶ to start.
+                  </p>
+                )}
+                {e.sets.map((s, i) =>
+                  e.timed ? (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="w-6 shrink-0 text-center text-xs text-faint">{i + 1}</span>
+                      <input
+                        aria-label={`${e.name} set ${i + 1} seconds`}
+                        className={`input-field min-h-[44px] w-0 flex-1 text-center tabular-nums ${s.done ? "opacity-60" : ""}`}
+                        inputMode="numeric"
+                        placeholder="sec"
+                        value={s.reps}
+                        onChange={(ev) => setField(e.id, i, "reps", ev.target.value.replace(/\D/g, ""))}
+                      />
+                      <span className="text-xs text-faint">sec</span>
+                      <button
+                        type="button"
+                        aria-label={`Start ${e.name} set ${i + 1}`}
+                        disabled={s.done || !!hold}
+                        onClick={() => startHold(e.id, i)}
+                        className="flex h-11 min-w-[64px] shrink-0 items-center justify-center gap-1 rounded-xl border border-accent/60 px-3 text-sm font-semibold text-accent disabled:opacity-30"
+                      >
+                        ▶ Start
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={s.done ? `Untick set ${i + 1}` : `Tick set ${i + 1}`}
+                        aria-pressed={s.done}
+                        onClick={() => toggleSet(e.id, i)}
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-lg font-bold ${
+                          s.done ? "border-accent bg-accent text-base-950" : "border-base-600 bg-base-800 text-faint"
+                        }`}
+                      >
+                        ✓
+                      </button>
+                    </div>
+                  ) : (
                   <div key={i} className="flex items-center gap-2">
                     <span className="w-6 shrink-0 text-center text-xs text-faint">{i + 1}</span>
                     <input
@@ -284,7 +394,8 @@ export default function WorkoutPage() {
                       ✓
                     </button>
                   </div>
-                ))}
+                  )
+                )}
               </div>
               <div className="mt-2 flex gap-2">
                 <button type="button" className="min-h-[44px] flex-1 rounded-xl text-sm text-muted active:bg-base-800" onClick={() => addSet(e.id)}>
@@ -326,7 +437,37 @@ export default function WorkoutPage() {
         </button>
       </div>
 
-      {w.restEndsAt && restLeft != null && restLeft > 0 && (
+      {hold && holdLeft != null && (
+        <div className="fixed inset-x-0 bottom-[76px] z-40 mx-auto max-w-lg px-4">
+          <div className={`overflow-hidden rounded-2xl border bg-base-900 shadow-lg ${switching ? "border-fuel/60" : "border-accent/60"}`}>
+            <div
+              className={`h-1 transition-[width] duration-200 ${switching ? "bg-fuel" : "bg-accent"}`}
+              style={{ width: `${Math.min(100, (holdLeft / (switching ? SWITCH_MS / 1000 : hold.seconds)) * 100)}%` }}
+            />
+            <div className="flex items-center gap-2 px-3 py-2">
+              <div className="flex-1">
+                <p className="text-xs uppercase tracking-wide text-faint">
+                  {switching
+                    ? "Switch sides"
+                    : `Hold${hold.sides === 2 ? ` · ${hold.side === 1 ? "first" : "second"} side` : ""} · ${
+                        w.exercises.find((e) => e.id === hold.exId)?.name ?? ""
+                      }`}
+                </p>
+                <p className={`text-3xl font-bold tabular-nums ${switching ? "text-fuel" : "text-ink"}`}>{clock(Math.ceil(holdLeft))}</p>
+              </div>
+              <button
+                type="button"
+                className="h-11 rounded-xl bg-base-800 px-4 text-sm text-muted"
+                onClick={() => update((x) => ({ ...x, hold: null }))}
+              >
+                Stop
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!hold && w.restEndsAt && restLeft != null && restLeft > 0 && (
         <div className="fixed inset-x-0 bottom-[76px] z-40 mx-auto max-w-lg px-4">
           <div className="overflow-hidden rounded-2xl border border-base-700 bg-base-900 shadow-lg">
             <div className="h-1 bg-accent transition-[width] duration-200" style={{ width: `${Math.min(100, (restLeft / (w.restTotal || 1)) * 100)}%` }} />

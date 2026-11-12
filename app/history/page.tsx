@@ -391,7 +391,13 @@ function HistoryCard({
                 <div key={i} className="rounded-lg bg-base-800 p-2.5">
                   <p className="text-sm font-medium text-white">{ex.name}</p>
                   <p className="mt-0.5 text-xs text-gray-400">
-                    {ex.sets.map((s) => `${s.reps ?? "?"}${s.weight ? ` × ${s.weight}${s.weight_unit ?? "lb"}` : ""}`).join(", ")}
+                    {ex.sets
+                      .map((s) =>
+                        s.seconds
+                          ? `${s.seconds}s${s.weight ? ` @ ${s.weight}${s.weight_unit ?? "lb"}` : ""}`
+                          : `${s.reps ?? "?"}${s.weight ? ` × ${s.weight}${s.weight_unit ?? "lb"}` : ""}`
+                      )
+                      .join(", ")}
                   </p>
                 </div>
               ))}
