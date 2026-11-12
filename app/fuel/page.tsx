@@ -1,6 +1,8 @@
 "use client";
 
 import { postOrQueue } from "@/lib/outbox";
+import MealEditor from "@/components/MealEditor";
+import FoodLibrary from "@/components/FoodLibrary";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { resizeImage } from "@/lib/imageResize";
 import PageHeader from "@/components/PageHeader";
@@ -48,6 +50,7 @@ export default function FuelPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Meal | null>(null);
   const [savedOffline, setSavedOffline] = useState<string | null>(null);
+  const [learnedNote, setLearnedNote] = useState<string | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -166,6 +169,13 @@ export default function FuelPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // An edited meal replaces its old copy in place; whatever was corrected is now in the food library.
+  function mealUpdated(m: Meal, learned: string[]) {
+    setMeals((list) => list.map((x) => (x.id === m.id ? m : x)));
+    setLearnedNote(learned.length ? `Remembered for next time: ${learned.join(", ")}` : null);
+    notifyDataChanged("meal");
   }
 
   async function toggleStar(rawText: string) {
@@ -385,6 +395,7 @@ export default function FuelPage() {
                 starBusy={starBusyKey === normalizeMealKey(m.raw_text)}
                 onToggleStar={() => toggleStar(m.raw_text)}
                 onDelete={() => requestDelete(m)}
+                onUpdated={mealUpdated}
               />
             ))}
           </div>
@@ -409,10 +420,17 @@ export default function FuelPage() {
                 starBusy={starBusyKey === normalizeMealKey(m.raw_text)}
                 onToggleStar={() => toggleStar(m.raw_text)}
                 onDelete={() => requestDelete(m)}
+                onUpdated={mealUpdated}
               />
             ))}
           </div>
         )}
+      </div>
+
+      {learnedNote && <p className="mt-3 px-4 text-xs text-accent">{learnedNote}</p>}
+
+      <div className="mt-6 px-4">
+        <FoodLibrary />
       </div>
 
       {pendingDelete && (
@@ -434,6 +452,7 @@ function MealCard({
   starBusy,
   onToggleStar,
   onDelete,
+  onUpdated,
 }: {
   meal: Meal;
   expanded: boolean;
@@ -442,7 +461,9 @@ function MealCard({
   starBusy: boolean;
   onToggleStar: () => void;
   onDelete: () => void;
+  onUpdated: (meal: Meal, learned: string[]) => void;
 }) {
+  const [editing, setEditing] = useState(false);
   return (
     <div className="card">
       <button type="button" onClick={onToggleExpand} className="flex w-full items-center justify-between text-left">
@@ -457,7 +478,18 @@ function MealCard({
 
       <p className="mt-1 text-sm text-gray-300">{meal.items.map((i) => i.name).join(", ") || meal.raw_text}</p>
 
-      {expanded && (
+      {expanded && editing && (
+        <MealEditor
+          meal={meal}
+          onCancel={() => setEditing(false)}
+          onSaved={(m, learned) => {
+            setEditing(false);
+            onUpdated(m, learned);
+          }}
+        />
+      )}
+
+      {expanded && !editing && (
         <div className="mt-3 space-y-3">
           {meal.items.length > 0 && (
             <ul className="space-y-1.5">
@@ -479,6 +511,9 @@ function MealCard({
               className={`text-xs font-medium ${starred ? "text-fuel" : "text-gray-400 active:text-fuel"}`}
             >
               {starred ? "★ Starred" : "☆ Star"}
+            </button>
+            <button onClick={() => setEditing(true)} className="min-h-[44px] px-2 text-xs font-medium text-accent">
+              Edit
             </button>
             <button onClick={onDelete} className="text-xs text-gray-600 active:text-danger">
               Delete

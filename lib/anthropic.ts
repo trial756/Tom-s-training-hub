@@ -529,7 +529,12 @@ export async function parseMealEntry(
       "nutritional estimates for common foods and typical portion sizes when exact amounts aren't given — then " +
       "roll those up into meal totals. Then give brief feedback on the day's nutrition as a whole: you're given " +
       "what was already eaten today and the day's training, so treat this meal as one part of the day (two small " +
-      "items an hour apart are one breakfast), and don't judge it alone or as run fuel by default." +
+      "items an hour apart are one breakfast), and don't judge it alone or as run fuel by default.\n\n" +
+      "You may be given the athlete's food library (foods he has corrected, with his numbers for the amount he " +
+      "eats) and past corrections. When an item is the same food as a library entry — same product, or his usual " +
+      "way of making it — use the library's numbers, scaled if the portion differs, and use its name. Learn from the " +
+      "corrections: don't repeat a mistake listed there (e.g. a sliced bagel's two halves are one bagel). Mention in " +
+      "notes when a library entry was used." +
       photoRules +
       "\n\n" +
       todayContext(),

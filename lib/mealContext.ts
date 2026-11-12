@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { APP_TIMEZONE, localDateKey, shiftDays } from "@/lib/format";
 import { plannedFor } from "@/lib/runReview";
 import { BODYWEIGHT_LB } from "@/lib/marathonPlan";
+import { correctionLines, foodLines, type Food, type MealCorrection } from "@/lib/foods";
 
 // ── The day around a meal ─────────────────────────────────────────────
 //
@@ -24,13 +25,15 @@ export async function buildMealDayContext(loggedAt: string): Promise<string> {
     const dayKey = localDateKey(at);
     const from = shiftDays(at, -8).toISOString();
     const to = shiftDays(at, 2).toISOString();
-    const [meals, runs, workouts, weight, planned, plannedTomorrow] = await Promise.all([
+    const [meals, runs, workouts, weight, planned, plannedTomorrow, foods, corrections] = await Promise.all([
       db.from("meals").select("logged_at, meal_type, summary, raw_text, calories, protein_g, carbs_g, fat_g").gte("logged_at", from).lt("logged_at", to).order("logged_at"),
       db.from("runs").select("logged_at, run_type, distance_miles, summary").gte("logged_at", shiftDays(at, -1).toISOString()).lt("logged_at", to),
       db.from("workouts").select("logged_at, summary").gte("logged_at", shiftDays(at, -1).toISOString()).lt("logged_at", to),
       db.from("weigh_ins").select("weight_lb").order("date", { ascending: false }).limit(1).maybeSingle(),
       plannedFor(dayKey).catch(() => null),
       plannedFor(localDateKey(shiftDays(at, 1))).catch(() => null),
+      db.from("foods").select("*").order("updated_at", { ascending: false }).limit(80),
+      db.from("meal_corrections").select("before, after, created_at").order("created_at", { ascending: false }).limit(8),
     ]);
 
     const all = (meals.data ?? []) as MealRow[];
@@ -82,6 +85,14 @@ export async function buildMealDayContext(loggedAt: string): Promise<string> {
         `Last 7 days: meals logged on ${days.length} of 7 days (gaps are logging habits, not missed meals); on logged days about ${avg((d) => d.cal)} cal and ${avg((d) => d.p)} g protein.`
       );
     }
+
+    // What Tom has taught it: his foods, and the mistakes it made before.
+    const library = foodLines((foods.data ?? []) as Food[]);
+    if (library.length) {
+      lines.push("", "Tom's food library — his corrected numbers for foods he eats, in the amount he eats them:", ...library);
+    }
+    const fixes = correctionLines((corrections.data ?? []) as MealCorrection[]);
+    if (fixes.length) lines.push("", "Past corrections (what was logged → what it really was):", ...fixes);
     return lines.join("\n");
   } catch {
     return "";
