@@ -9,7 +9,7 @@
 //   the plan show what they last showed. Writes (POST/PATCH/DELETE) are never
 //   touched here; the outbox handles saving offline.
 
-const VERSION = "v1";
+const VERSION = "v2";
 const STATIC = `tth-static-${VERSION}`;
 const PAGES = `tth-pages-${VERSION}`;
 const API = `tth-api-${VERSION}`;
@@ -89,3 +89,36 @@ async function networkFirst(req, name, key) {
     throw err;
   }
 }
+
+// ── Notifications (the 5pm water check) ──
+self.addEventListener("push", (event) => {
+  let msg = { title: "Training Hub", body: "", url: "/" };
+  try {
+    msg = { ...msg, ...event.data.json() };
+  } catch {}
+  event.waitUntil(
+    self.registration.showNotification(msg.title, {
+      body: msg.body,
+      tag: msg.tag || "training-hub",
+      data: { url: msg.url || "/" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    (async () => {
+      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const w of wins) {
+        if ("focus" in w) {
+          await w.focus();
+          if ("navigate" in w) await w.navigate(url);
+          return;
+        }
+      }
+      await self.clients.openWindow(url);
+    })()
+  );
+});

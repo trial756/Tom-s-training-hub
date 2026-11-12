@@ -25,7 +25,7 @@ export async function buildMealDayContext(loggedAt: string): Promise<string> {
     const dayKey = localDateKey(at);
     const from = shiftDays(at, -8).toISOString();
     const to = shiftDays(at, 2).toISOString();
-    const [meals, runs, workouts, weight, planned, plannedTomorrow, foods, corrections] = await Promise.all([
+    const [meals, runs, workouts, weight, planned, plannedTomorrow, foods, corrections, water] = await Promise.all([
       db.from("meals").select("logged_at, meal_type, summary, raw_text, calories, protein_g, carbs_g, fat_g").gte("logged_at", from).lt("logged_at", to).order("logged_at"),
       db.from("runs").select("logged_at, run_type, distance_miles, summary").gte("logged_at", shiftDays(at, -1).toISOString()).lt("logged_at", to),
       db.from("workouts").select("logged_at, summary").gte("logged_at", shiftDays(at, -1).toISOString()).lt("logged_at", to),
@@ -34,6 +34,7 @@ export async function buildMealDayContext(loggedAt: string): Promise<string> {
       plannedFor(localDateKey(shiftDays(at, 1))).catch(() => null),
       db.from("foods").select("*").order("updated_at", { ascending: false }).limit(80),
       db.from("meal_corrections").select("before, after, created_at").order("created_at", { ascending: false }).limit(8),
+      db.from("water_logs").select("logged_at, oz").gte("logged_at", shiftDays(at, -1).toISOString()).lte("logged_at", at.toISOString()),
     ]);
 
     const all = (meals.data ?? []) as MealRow[];
@@ -65,6 +66,9 @@ export async function buildMealDayContext(loggedAt: string): Promise<string> {
     if (plannedTomorrow && hour >= 15) {
       lines.push(`Tomorrow's plan: ${plannedTomorrow.title}${plannedTomorrow.run ? ` (${plannedTomorrow.run.type}${plannedTomorrow.run.miles ? `, ${plannedTomorrow.run.miles} mi` : ""})` : ""}.`);
     }
+
+    const waterOz = (water.data ?? []).filter((w) => sameDay(w.logged_at)).reduce((s, w) => s + Number(w.oz), 0);
+    lines.push(`Water logged today so far: ${Math.round(waterOz)} oz (logging may be incomplete).`);
 
     const lb = weight.data?.weight_lb != null ? Number(weight.data.weight_lb) : BODYWEIGHT_LB;
     const kg = lb / 2.2046;

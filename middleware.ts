@@ -39,13 +39,15 @@ async function deviceActive(id: string, event: NextFetchEvent): Promise<boolean>
   }
 }
 
+const CRON_PATHS = ["/api/garmin/sync", "/api/water/remind"];
+
 function isCron(req: NextRequest): boolean {
-  if (req.nextUrl.pathname !== "/api/garmin/sync" || req.method !== "GET") return false;
+  if (!CRON_PATHS.includes(req.nextUrl.pathname) || req.method !== "GET") return false;
   const secret = process.env.CRON_SECRET;
   if (secret) return req.headers.get("authorization") === `Bearer ${secret}`;
   // Without CRON_SECRET, Vercel's cron is recognised by its user agent. The
-  // route only pulls Garmin data in and answers with counts, so a spoof
-  // gains nothing.
+  // routes only pull Garmin data in or send the owner a water nudge, and
+  // answer with counts, so a spoof gains nothing.
   return (req.headers.get("user-agent") ?? "").startsWith("vercel-cron/");
 }
 

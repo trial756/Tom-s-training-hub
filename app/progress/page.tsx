@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import StatTile from "@/components/StatTile";
 import LiftProgress from "@/components/LiftProgress";
 import WeightCard from "@/components/WeightCard";
+import WaterTrend from "@/components/WaterTrend";
 import Spinner from "@/components/Spinner";
 import { formatPace, formatMinutes } from "@/lib/format";
 import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
@@ -201,6 +202,7 @@ export default function ProgressPage() {
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Body</h2>
           <WeightCard />
+          <WaterTrend />
         </section>
       </div>
 
