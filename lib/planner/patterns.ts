@@ -32,7 +32,7 @@ const RULES: [RegExp, Pattern][] = [
   // Jumps, sprints, throws and strides: fast, low-rep, done fresh.
   [/jump|pogo|\bhops?\b|bound|sprint|strides?\b|med(icine)? ball|ball slam|throw|shuttle|agility|ladder drill|skater/, "power"],
   [/stretch|cat.?cow|90\/90|pigeon|leg swing|a.?skip|walk(ing)?$|^walk|mobility|foam|yoga|world.?s greatest/, "mobility"],
-  [/pallof|plank|dead ?bug|crunch|sit.?up|hollow|bird ?dog|ab wheel|leg raise|copenhagen|carry|suitcase|russian twist/, "core"],
+  [/pallof|plank|dead ?bug|crunch|sit.?up|hollow|bird ?dog|ab wheel|rollout|leg raise|knee raise|copenhagen|carry|suitcase|russian twist|wood ?chop/, "core"],
   [/calf/, "calf"],
   [/shrug/, "shrug"],
   [/rear delt|face pull|reverse fly|reverse pec/, "rear_delt"],

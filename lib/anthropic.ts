@@ -276,7 +276,8 @@ export async function parseWorkoutEntry(text: string, historyContext: string, pl
       "Name each exercise the way the athlete has logged it before, so its history stays in one place. These are " +
       `the standard names for lifts that have been logged under several: ${Object.keys(EXERCISE_ALIASES).join("; ")}. ` +
       "Use one of them when it's the same movement and equipment; keep a different grip, implement or one-arm " +
-      "version as its own name.\n\n" +
+      "version as its own name. A pec dec used for the shoulders (\"pec dec deltoid/delt flys\", reverse pec dec) is " +
+      "Rear Delt Fly, never Pec Dec Fly (that's the chest version); cable flys are their own lift, not Pec Dec Fly.\n\n" +
       todayContext(),
     userText:
       `New workout entry to parse:\n"${text}"\n\n` +

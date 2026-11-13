@@ -1,6 +1,8 @@
+import { exerciseKey } from "@/lib/exerciseNames";
 import type { MuscleRegion } from "@/lib/muscles";
 import { patternOf, type Pattern } from "@/lib/planner/patterns";
 import type { PlanExercise, PlanSession, StrengthDose } from "@/lib/planner/types";
+import type { Exercise } from "@/lib/types";
 
 // ── Weekly floors for the whole athlete ──────────────────────────────
 //
@@ -180,6 +182,87 @@ export function fillGaps(
       add(s, ex("Couch Stretch", 2, "45 s per side", ["quads"], "Back knee against the wall, squeeze the glute, stay tall.", "mobility floor — hip flexors and quads"));
       have.mobility += 1;
     }
+  }
+  return sessions;
+}
+
+// ── What this week has actually done ─────────────────────────────────
+//
+// The floors and the core cap count what's behind us this week. The plan's
+// kept sessions alone miss work done on a day the plan had moved elsewhere
+// (Nov 13 2026: calf raises lifted Thursday didn't count, so the replan put
+// calves on Friday too). A day with a logged workout counts what was logged;
+// a kept day with nothing logged counts what it asked for.
+
+export interface LoggedDay {
+  date: string;
+  exercises: Exercise[];
+}
+
+function loggedExercise(e: Exercise): PlanExercise {
+  const sets = e.sets ?? [];
+  const reps = Math.max(0, ...sets.map((x) => x.reps ?? 0));
+  const secs = Math.max(0, ...sets.map((x) => x.seconds ?? 0));
+  return { name: e.name, sets: sets.length || 1, reps: reps ? String(reps) : secs ? `${secs}s` : "", target: null, cue: null, isNew: false, regions: [] };
+}
+
+export function doneThisWeek(kept: PlanSession[], keptOn: Record<string, string>, logged: LoggedDay[]): PlanSession[] {
+  const byDate = new Map<string, PlanExercise[]>();
+  for (const l of logged) byDate.set(l.date, [...(byDate.get(l.date) ?? []), ...l.exercises.map(loggedExercise)]);
+  const out: PlanSession[] = [];
+  const keptDates = new Set<string>();
+  for (const s of kept) {
+    const date = keptOn[s.id];
+    if (date) keptDates.add(date);
+    const did = date ? byDate.get(date) : undefined;
+    out.push(did ? { ...s, exercises: did } : s);
+  }
+  for (const [date, exercises] of byDate) {
+    if (keptDates.has(date)) continue;
+    out.push({ id: `logged-${date}`, kind: "lift", title: "Logged", rationale: "", regions: [], exercises, priority: 99, preferredDow: null, taxesLegs: false, miles: null });
+  }
+  return out;
+}
+
+// ── Core variety ─────────────────────────────────────────────────────
+//
+// Tom, Nov 2026: Pallof presses and dead bugs were in nearly every session.
+// A core movement appears at most twice a week (counting what's done); a
+// third goes to the first of these the week hasn't used. Copenhagen planks
+// are the hip floor, so they're left alone.
+
+export const MAX_CORE_REPEATS = 2;
+
+const CORE_ROTATION: Omit<PlanExercise, "sets">[] = [
+  { name: "Cable Woodchop", reps: "10 per side", target: null, cue: "Rotate through the hips and trunk together, arms long; control it back.", isNew: false, regions: ["obliques", "abs"] },
+  { name: "Hanging Knee Raise", reps: "10-12", target: null, cue: "No swing: curl the pelvis up, lower for two seconds.", isNew: false, regions: ["abs"] },
+  { name: "Suitcase Carry", reps: "40 m per side", target: null, cue: "Heavy dumbbell in one hand, stand tall, don't lean toward it.", isNew: false, regions: ["obliques", "abs", "forearms"] },
+  { name: "Ab Wheel Rollout", reps: "8-10", target: null, cue: "From the knees, ribs down; roll only as far as the low back stays flat.", isNew: false, regions: ["abs"] },
+  { name: "Bird Dog", reps: "8 per side", target: null, cue: "Reach long, hips square; pause two seconds at full reach.", isNew: false, regions: ["abs", "lower_back", "glutes"] },
+  { name: "Hollow Hold", reps: "20-30s", target: null, cue: "Low back pressed into the floor; raise arms and legs only as far as it stays there.", isNew: false, regions: ["abs"] },
+];
+
+export function varyCore(input: PlanSession[], already: PlanSession[] = []): PlanSession[] {
+  const sessions = input.map((s) => ({ ...s, exercises: [...s.exercises] }));
+  const count = new Map<string, number>();
+  const bump = (name: string) => count.set(exerciseKey(name), (count.get(exerciseKey(name)) ?? 0) + 1);
+  for (const s of already) for (const e of s.exercises) if (patternOf(e.name) === "core") bump(e.name);
+  const order = [...sessions].sort((a, b) => (a.preferredDow ?? 9) - (b.preferredDow ?? 9));
+  for (const s of order) {
+    s.exercises = s.exercises.map((e) => {
+      if (patternOf(e.name) !== "core" || isHip(e.name)) return e;
+      if ((count.get(exerciseKey(e.name)) ?? 0) < MAX_CORE_REPEATS) {
+        bump(e.name);
+        return e;
+      }
+      const inSession = new Set(s.exercises.map((x) => exerciseKey(x.name)));
+      const alt = CORE_ROTATION.find((a) => !count.has(exerciseKey(a.name)) && !inSession.has(exerciseKey(a.name)))
+        ?? CORE_ROTATION.find((a) => (count.get(exerciseKey(a.name)) ?? 0) < MAX_CORE_REPEATS && !inSession.has(exerciseKey(a.name)));
+      if (!alt) return e;
+      bump(alt.name);
+      for (const r of alt.regions) if (!s.regions.includes(r)) s.regions = [...s.regions, r];
+      return { ...alt, sets: e.sets, note: `core variety — ${e.name} already twice this week` };
+    });
   }
   return sessions;
 }
