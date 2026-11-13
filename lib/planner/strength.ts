@@ -16,6 +16,8 @@ export function strengthDoseFor(opts: {
   liftDaysPerWeek: number;
   /** Recovery weeks: 1 = the week right after the race, 2 = the week after that. */
   recoveryPhase?: 1 | 2 | null;
+  /** Focus weeks: the programme's dose for this week (lib/planner/program.ts). */
+  program?: { liftSessions: number; heavyLower: number; guidance: string } | null;
 }): StrengthDose {
   const { marathon, block, liftDaysPerWeek } = opts;
   const clamp = (min: number, max: number) => Math.min(max, Math.max(min, liftDaysPerWeek));
@@ -41,6 +43,10 @@ export function strengthDoseFor(opts: {
         "load, no leg lifting, calves or jumps at all. Nothing that leaves soreness. The " +
         "never-two-days-without-the-gym rule is off this week.",
     };
+  }
+
+  if (opts.program) {
+    return { mode: "build", liftSessions: opts.program.liftSessions, heavyLower: opts.program.heavyLower, guidance: opts.program.guidance };
   }
 
   const buildFocus = block.kind === "focus" && block.focus !== "endurance";

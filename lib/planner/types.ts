@@ -178,6 +178,14 @@ export interface PlannerContext {
   fixedDays?: { date: string; title: string }[];
   /** Recovery weeks only: run limits enforced in code. */
   recovery?: { phase: 1 | 2; maxWeekMiles: number; maxRunMiles: number; note: string };
+  /** Focus weeks: where the muscle & athleticism programme is (lib/planner/program.ts). */
+  program?: {
+    label: string;
+    phase: "ramp" | "build" | "deload";
+    /** Hard sets per muscle group this week; code tops up or trims to it. */
+    sets: Record<string, number>;
+    run: { weeklyMiles: number; longRunMiles: number | null; intervals: string | null };
+  };
   /** The race block this week sits in (whichever race it builds toward), or null outside one. */
   marathon: {
     planWeek: number;

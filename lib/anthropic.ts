@@ -841,8 +841,10 @@ function frameFor(context: Partial<PlannerContext>): string {
     return (
       `You are a strength and conditioning coach ${lead}The athlete's current goal is "${g.title}"` +
       `${g.notes ? `: ${g.notes}` : "."} Lifting leads; running is conditioning and should never compromise the ` +
-      "lifts. A race in block.upcoming is run for fun: keep the two days before it easy and let it stand in for " +
-      "the week's long run.\n\n"
+      "lifts. The week follows a standing programme: `program` in the data says which week of the cycle this is, " +
+      "the hard sets each muscle group gets, and the running (weekly miles, the long run, the interval session) — " +
+      "plan the runs to those numbers; code enforces the long run and the weekly total. The strengthDose guidance " +
+      "lays out the sessions. A race in fixedDays is run for fun and stands in for that week's long run.\n\n"
     );
   }
   return (
