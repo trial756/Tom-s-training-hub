@@ -14,18 +14,32 @@ export function strengthDoseFor(opts: {
   /** What the week is for (lib/goals.ts). */
   block: { kind: PlannerContext["block"]["kind"]; focus: string | null };
   liftDaysPerWeek: number;
+  /** Recovery weeks: 1 = the week right after the race, 2 = the week after that. */
+  recoveryPhase?: 1 | 2 | null;
 }): StrengthDose {
   const { marathon, block, liftDaysPerWeek } = opts;
   const clamp = (min: number, max: number) => Math.min(max, Math.max(min, liftDaysPerWeek));
 
   if (block.kind === "recovery") {
+    if (opts.recoveryPhase === 2) {
+      return {
+        mode: "maintain",
+        liftSessions: 3,
+        heavyLower: 0,
+        guidance:
+          "Second week after the race: three upper-body and core sessions at normal load. Legs come back gently — " +
+          "one or two light single-leg or bodyweight movements (two sets of 10-12) on one session, no jumps. Nothing " +
+          "that leaves soreness. The never-two-days-without-the-gym rule is off this week.",
+      };
+    }
     return {
       mode: "maintain",
-      liftSessions: clamp(2, 3),
+      liftSessions: 2,
       heavyLower: 0,
       guidance:
-        "Recovery after a race: the legs are still repairing. Upper body and core at moderate load, two or three " +
-        "short sessions; legs only as light mobility and activation. Nothing that leaves soreness.",
+        "The week right after the race: the legs are repairing. Two short upper-body and core sessions at moderate " +
+        "load, no leg lifting, calves or jumps at all. Nothing that leaves soreness. The " +
+        "never-two-days-without-the-gym rule is off this week.",
     };
   }
 
@@ -59,7 +73,9 @@ export function strengthDoseFor(opts: {
       heavyLower: 0,
       guidance:
         "Final ten days. No heavy or new lifting and nothing that leaves soreness: two short upper-body and core " +
-        "maintenance sessions at familiar loads, no legs beyond glute activation. Mobility and strides carry the rest.",
+        "maintenance sessions at familiar loads, no legs beyond glute activation. Mobility and strides carry the rest. " +
+        "The never-two-days-without-the-gym rule is off for these days. In race week there is no long run: short easy " +
+        "runs, and at most one short sharpener (a few minutes at goal pace) early in the week.",
     };
   }
 

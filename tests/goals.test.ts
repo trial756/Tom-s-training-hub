@@ -44,9 +44,17 @@ test("a new B race gets a generated build that peaks and tapers", () => {
   assert.equal(blockForWeek(goals, "2027-04-18", "2027-04-18").kind, "focus", "no recovery weeks after a 10K");
 });
 
-test("no goals at all means general fitness", () => {
+test("no goals at all means muscle and athleticism", () => {
   const b = blockForWeek([{ ...DEFAULT_GOALS[0], status: "done" }], "2027-06-06", "2027-06-06");
-  assert.equal(b.kind, "base");
+  assert.equal(b.kind, "focus");
+  assert.equal(b.goal?.focus, "athleticism");
+});
+
+test("a race marked done still gets its recovery weeks", () => {
+  const goals = [{ ...DEFAULT_GOALS[0], status: "done" as const }, DEFAULT_GOALS[2]];
+  assert.equal(blockForWeek(goals, "2026-12-13", "2026-12-14").kind, "recovery");
+  assert.equal(blockForWeek(goals, "2026-12-20", "2026-12-20").kind, "recovery");
+  assert.equal(blockForWeek(goals, "2026-12-27", "2026-12-27").kind, "focus");
 });
 
 test("the countdown follows the next race", () => {

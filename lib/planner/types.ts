@@ -50,6 +50,11 @@ export interface PlanSession {
    * plan already accounts for whatever it was.
    */
   frozen?: boolean;
+  /**
+   * Pinned to this date by code (race day, the shakeout, the no-run days
+   * after a race — lib/planner/raceDays.ts). Never placed on another day.
+   */
+  fixedDate?: string;
 }
 
 export type PlanDayStatus = "upcoming" | "today" | "done" | "off_script" | "missed";
@@ -169,6 +174,10 @@ export interface PlannerContext {
     /** Other races within three weeks (C races, tune-ups): ease off around them. */
     upcoming: { title: string; date: string; distance_mi: number | null; priority: "A" | "B" | "C"; daysAway: number }[];
   };
+  /** Days already set in code (race day and the days around it): plan the other days only. */
+  fixedDays?: { date: string; title: string }[];
+  /** Recovery weeks only: run limits enforced in code. */
+  recovery?: { phase: 1 | 2; maxWeekMiles: number; maxRunMiles: number; note: string };
   /** The race block this week sits in (whichever race it builds toward), or null outside one. */
   marathon: {
     planWeek: number;

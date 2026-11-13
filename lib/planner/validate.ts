@@ -34,6 +34,8 @@ export function isLong(s: PlanSession | undefined): boolean {
   return !!s && (s.kind === "run" || s.kind === "lift_and_run") && plannedRunFor(s)?.type === "Long";
 }
 
+const isRace = (s: PlanSession | undefined) => !!s && s.kind === "run" && plannedRunFor(s)?.type === "Race";
+
 /** Lifting that loads the legs — not core, calves-only or mobility. */
 export function hasLegWork(s: PlanSession | undefined): boolean {
   if (!s || (s.kind !== "lift" && s.kind !== "lift_and_run")) return false;
@@ -74,7 +76,7 @@ function findViolations(days: PlanDay[], byId: Map<string, PlanSession>, outside
     if (daysBetweenKeys(a, b) === 1 && b >= today) out.push({ kind: "adjacent", a, b });
   }
   for (const d of days) {
-    if (!isLong(at.get(d.date)) || d.date < today) continue;
+    if ((!isLong(at.get(d.date)) && !isRace(at.get(d.date))) || d.date < today) continue;
     const before = days.find((x) => daysBetweenKeys(x.date, d.date) === 1);
     if (before && before.date >= today && hasLegWork(at.get(before.date)) && !isHard(at.get(before.date))) {
       out.push({ kind: "legs_before_long", legDay: before.date, longDay: d.date });
@@ -106,7 +108,7 @@ export function validateWeek(input: WeekCheckInput): WeekCheck {
   const warnings: string[] = [];
 
   const movable = (d: PlanDay) =>
-    d.date > input.today && d.status === "upcoming" && !!d.sessionId && !byId.get(d.sessionId)?.frozen;
+    d.date > input.today && d.status === "upcoming" && !!d.sessionId && !byId.get(d.sessionId)?.frozen && !byId.get(d.sessionId)?.fixedDate;
   const count = () => findViolations(days, byId, outsideHard, input.today).length;
 
   const swap = (x: PlanDay, y: PlanDay) => {
@@ -179,7 +181,8 @@ export function validateWeek(input: WeekCheckInput): WeekCheck {
   if (input.weeklyTarget) {
     const planned = days
       .filter((d) => d.date >= input.today && d.status !== "done" && d.sessionId)
-      .reduce((sum, d) => sum + (byId.get(d.sessionId!)?.miles ?? 0), 0);
+      // The race itself isn't training mileage.
+      .reduce((sum, d) => sum + (isRace(byId.get(d.sessionId!)) ? 0 : byId.get(d.sessionId!)?.miles ?? 0), 0);
     const total = (input.milesDone ?? 0) + planned;
     if (total > input.weeklyTarget * 1.25) warnings.push(`This week adds up to ${Math.round(total)} mi against a ${input.weeklyTarget} mi target.`);
     if (total < input.weeklyTarget * 0.75) warnings.push(`This week adds up to ${Math.round(total)} mi — short of the ${input.weeklyTarget} mi target.`);
