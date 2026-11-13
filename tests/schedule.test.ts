@@ -146,3 +146,20 @@ test("each upcoming day is placed against the long run", () => {
   const before = days.find((d) => d.date === "2026-11-06");
   assert.match(before?.contextNote ?? "", /Day before the 20-mile long run \(Sat\)/);
 });
+
+test("Nov 12 2026 bug: a run + legs day with only the legs logged isn't repeated the next day", () => {
+  const sessions = [
+    session("legs", "lift_and_run", "Easy run + Lower body (heavy)", { runType: "Easy", miles: 3, taxesLegs: true, regions: ["quads", "hamstrings", "glutes"], priority: 2 }),
+    session("upper", "lift", "Shoulders & arms (pre-long-run)", { priority: 3, regions: ["front_delts", "biceps"] }),
+    session("long", "run", "Long 16", { runType: "Long", miles: 16, priority: 1 }),
+  ];
+  const logs = emptyLogs();
+  // Thursday: the leg workout was done, the easy run wasn't logged.
+  logs["2026-11-05"] = { hasWorkout: true, hasRun: false, summary: "Lower Body (Heavy)", regions: ["hamstrings", "glutes", "calves"], runs: [] };
+  const { days } = plan(sessions, "2026-11-06", logs, { legs: "2026-11-05", upper: "2026-11-06", long: "2026-11-07" });
+  const week = byDay(days, sessions);
+  assert.equal(days.find((d) => d.date === "2026-11-05")?.status, "done");
+  assert.notEqual(week.Fri, "Easy run + Lower body (heavy)");
+  assert.equal(week.Fri, "Shoulders & arms (pre-long-run)");
+  assert.equal(week.Sat, "Long 16");
+});

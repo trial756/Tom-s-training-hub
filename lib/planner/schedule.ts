@@ -65,7 +65,12 @@ function satisfiedBy(session: PlanSession, log: DayLog): boolean {
     case "run":
       return runMatched(session, log);
     case "lift_and_run":
-      return liftMatched(session, log) && log.hasRun;
+      // Either half done counts: re-placing the session would repeat the half
+      // already done (Nov 12 2026: heavy legs lifted without the easy run came
+      // back the next day — the day before the long run — as the same leg
+      // workout). Missed run miles reappear through the mileage reconciler,
+      // and a replan nets the lift dose against what was logged.
+      return liftMatched(session, log) || runMatched(session, log);
     case "active_recovery":
       return log.hasWorkout || log.hasRun;
     case "rest":
