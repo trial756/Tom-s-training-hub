@@ -11,6 +11,7 @@ import { liftTrends } from "@/lib/planner/progression";
 import { applyStrengthRules } from "@/lib/planner/strengthRules";
 import { doneThisWeek, fillGaps, varyCore } from "@/lib/planner/gaps";
 import { applyRaceWeekRules, applyRecoveryRules, fixedSessionsFor, keepForOpenDays } from "@/lib/planner/raceDays";
+import { applyAthletics, easeLegLoads, fitVolume, programFor } from "@/lib/planner/program";
 import { isHard, validateWeek } from "@/lib/planner/validate";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
 import { loadGoals } from "@/lib/goalsStore";
@@ -74,6 +75,10 @@ async function loggedExerciseNames(): Promise<Set<string>> {
   }
   return names;
 }
+
+/** The week's mileage target: the race block's, else the focus programme's. */
+const weeklyTargetOf = (c: { marathon: { weeklyMileage: number } | null; program?: { run: { weeklyMiles: number } } }) =>
+  c.marathon?.weeklyMileage ?? c.program?.run.weeklyMiles ?? null;
 
 /** Days either side of today in the strip — 11 days with today in the middle. */
 const STRIP_RADIUS = 5;
@@ -216,9 +221,9 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
       if (raceWeek) fresh = applyRaceWeekRules(fresh);
       const fixedEasyMiles = fixed.reduce((sum, s) => sum + (s.run?.type === "Race" ? 0 : s.miles ?? 0), 0);
       const fitted = fitWeekToTargets(fresh, {
-        weeklyTarget: context.marathon?.weeklyMileage ?? null,
+        weeklyTarget: weeklyTargetOf(context),
         // Race week has no long run.
-        longRunMiles: raceWeek ? null : context.marathon?.longRunMiles ?? null,
+        longRunMiles: raceWeek ? null : context.marathon?.longRunMiles ?? context.program?.run.longRunMiles ?? null,
         milesAlreadyRun: context.milesThisWeek + fixedEasyMiles,
       }).sessions;
       // Structure, loads, stall breakers and "new" tags are rules, not model output.
@@ -231,26 +236,28 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
           .map((w) => ({ date: localDateKey(new Date(w.logged_at)), exercises: w.exercises ?? [] }))
           .filter((w) => w.date >= week && w.date < context.planFrom)
       );
-      const ruled = applyStrengthRules(
-          // Weekly floors for legs, power, mobility and hips, then no core
-          // movement more than twice a week (lib/planner/gaps.ts).
-          varyCore(
-            fillGaps(fitted, {
-              mode: context.strengthDose.mode,
-              daysToRace: context.marathon?.daysToRace ?? null,
-              recoveryWeek: !!context.marathon?.isRecoveryWeek,
-              afterRace: context.block.kind === "recovery",
-              alreadyThisWeek: done,
-            }),
-            done
-          ),
-          {
-          trends: liftTrends(workouts, today),
-          knownNames: await loggedExerciseNames(),
-          fatigued: context.fatigued,
-          alreadyThisWeek: [...kept, ...done.filter((s) => s.id.startsWith("logged-"))],
-          }
-        );
+      // Focus weeks follow the standing programme (lib/planner/program.ts).
+      const program = programFor(goals, week, todayKey);
+      // Weekly floors for legs, power, mobility and hips, then no core
+      // movement more than twice a week (lib/planner/gaps.ts).
+      const floored = fillGaps(fitted, {
+        mode: context.strengthDose.mode,
+        daysToRace: context.marathon?.daysToRace ?? null,
+        recoveryWeek: !!context.marathon?.isRecoveryWeek,
+        afterRace: context.block.kind === "recovery",
+        alreadyThisWeek: done,
+      });
+      // The programme's jumps and sprints replace any other power work, and
+      // each muscle group is brought to its hard-set target for the week.
+      const shaped = program ? fitVolume(varyCore(applyAthletics(floored, program), done), program.sets, done) : varyCore(floored, done);
+      const loaded = applyStrengthRules(shaped, {
+        trends: liftTrends(workouts, today),
+        knownNames: await loggedExerciseNames(),
+        fatigued: context.fatigued,
+        hold: program?.hold,
+        alreadyThisWeek: [...kept, ...done.filter((s) => s.id.startsWith("logged-"))],
+      });
+      const ruled = program ? easeLegLoads(loaded, program.legLoadFactor) : loaded;
       const sessions = [
         ...kept,
         ...fixed,
@@ -343,7 +350,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
       days: scheduled,
       today: todayKey,
       milesThisWeek: context.milesThisWeek,
-      weeklyTarget: context.marathon?.weeklyMileage ?? null,
+      weeklyTarget: weeklyTargetOf(context),
       avgWeeklyMiles: context.avgWeeklyMiles,
       typicalRunMiles: context.typicalRunMiles,
     });
@@ -354,7 +361,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
       days: reconciled.days,
       sessions: reconciled.sessions,
       today: todayKey,
-      weeklyTarget: context.marathon?.weeklyMileage ?? null,
+      weeklyTarget: weeklyTargetOf(context),
       milesDone: context.milesThisWeek,
     });
     reconciled.days = checked.days;
@@ -455,7 +462,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         days: placed,
         today: week,
         milesThisWeek: 0,
-        weeklyTarget: futureContext.marathon?.weeklyMileage ?? null,
+        weeklyTarget: weeklyTargetOf(futureContext),
         avgWeeklyMiles: futureContext.avgWeeklyMiles,
         typicalRunMiles: futureContext.typicalRunMiles,
       });
@@ -465,7 +472,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         // Every day of a future week may still move.
         today: localDateKey(shiftDays(keyToDate(week), -1)),
         outsideHard: currentHard,
-        weeklyTarget: futureContext.marathon?.weeklyMileage ?? null,
+        weeklyTarget: weeklyTargetOf(futureContext),
         milesDone: 0,
       });
       const days = futureChecked.days;

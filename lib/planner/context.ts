@@ -1,4 +1,5 @@
 import { fixedSessionsFor, recoveryCapsFor } from "@/lib/planner/raceDays";
+import { programFor } from "@/lib/planner/program";
 import { daysBetweenKeys, localDateKey, normalizeExerciseName, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
 import { MUSCLE_LABELS, MUSCLE_REGIONS, type MuscleRegion } from "@/lib/muscles";
 import { buildExerciseLookup, computeMuscleActivity, type ExerciseLookup } from "@/lib/muscleCoverage";
@@ -247,11 +248,15 @@ export function buildPlannerContext(opts: {
   const recoveryCaps =
     blockInfo.kind === "recovery" && g ? recoveryCapsFor(g.date, g.distance_mi ?? 26.2, weekStart) : null;
 
+  // Focus weeks: where the standing programme is this week.
+  const program = programFor(opts.goals?.length ? opts.goals : DEFAULT_GOALS, weekStart, todayKey);
+
   const strengthDose = strengthDoseFor({
     marathon,
     block: { kind: block.kind, focus: block.goal?.focus ?? null },
     liftDaysPerWeek,
     recoveryPhase: recoveryCaps?.phase ?? null,
+    program,
   });
 
   // Today is already spoken for once anything is logged on it — a replan
@@ -306,9 +311,10 @@ export function buildPlannerContext(opts: {
           },
         }
       : {}),
+    ...(program ? { program: { label: program.label, phase: program.phase, sets: program.sets, run: program.run } } : {}),
     marathon,
     milesThisWeek,
-    milesRemaining: marathon ? Math.max(0, Math.round((marathon.weeklyMileage - milesThisWeek) * 10) / 10) : 0,
+    milesRemaining: Math.max(0, Math.round(((marathon?.weeklyMileage ?? program?.run.weeklyMiles ?? milesThisWeek) - milesThisWeek) * 10) / 10),
     loggedThisWeek,
     regions,
     neglected,

@@ -25,6 +25,8 @@ interface Context {
   knownNames: Set<string>;
   /** Big mileage jump or rough runs — no load increases on leg lifts. */
   fatigued: boolean;
+  /** Ramp-in and deload weeks: no load increases on any lift. */
+  hold?: boolean;
   /** Sessions already behind us this week (kept through a replan). */
   alreadyThisWeek?: PlanSession[];
 }
@@ -93,7 +95,7 @@ export function applyStrengthRules(input: PlanSession[], ctx: Context): PlanSess
       for (const row of rows) {
         const trend = findTrend(ctx.trends, row.ex.name);
         if (!trend || !row.role) continue;
-        const rx = prescribe(trend, row.role, { fatigued: ctx.fatigued });
+        const rx = prescribe(trend, row.role, { fatigued: ctx.fatigued, hold: ctx.hold });
         if (!rx) continue;
         row.ex.reps = rx.reps;
         row.ex.target = `${rx.target} lb`;
@@ -121,7 +123,7 @@ export function applyStrengthRules(input: PlanSession[], ctx: Context): PlanSess
         const pattern = patternOf(pick.name);
         const role: Role = COMPOUND.has(pattern) ? "volume" : "isolation";
         const breakerTrend = findTrend(ctx.trends, pick.name);
-        const rx = breakerTrend ? prescribe(breakerTrend, role, { fatigued: ctx.fatigued }) : null;
+        const rx = breakerTrend ? prescribe(breakerTrend, role, { fatigued: ctx.fatigued, hold: ctx.hold }) : null;
         const ex: PlanExercise = {
           name: pick.name,
           sets: 3,
@@ -159,7 +161,7 @@ export function applyStrengthRules(input: PlanSession[], ctx: Context): PlanSess
         const role = roleFromReps(ex.reps, pattern);
         const trend = findTrend(ctx.trends, ex.name);
         if (!trend || !role || ex.target) continue;
-        const rx = prescribe(trend, role, { fatigued: ctx.fatigued });
+        const rx = prescribe(trend, role, { fatigued: ctx.fatigued, hold: ctx.hold });
         if (!rx || rx.target <= 0) continue;
         ex.reps = rx.reps;
         ex.target = `${rx.target} lb`;

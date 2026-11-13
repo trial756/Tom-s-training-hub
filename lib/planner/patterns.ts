@@ -39,6 +39,8 @@ const RULES: [RegExp, Pattern][] = [
   [/lateral raise|side raise|upright row/, "lateral_raise"],
   [/fly|pec dec|crossover|cross.?over/, "fly"],
   [/skull|pushdown|push.?down|tricep|triceps|kickback|overhead extension|dip/, "elbow_extension"],
+  // A leg curl is hamstring work, not a biceps curl.
+  [/leg curl|hamstring curl|nordic/, "hinge"],
   [/curl/, "elbow_flexion"],
   [/pulldown|pull.?down|pull.?up|chin.?up|lat pull/, "vertical_pull"],
   [/row|cable pull|horizontal pull|seated pull/, "horizontal_pull"],

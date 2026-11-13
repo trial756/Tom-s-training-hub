@@ -121,7 +121,7 @@ export interface Prescription {
  * a lighter 8–10 block; a regressing one holds. `fatigued` (a big mileage
  * jump) freezes increments on leg lifts.
  */
-export function prescribe(trend: LiftTrend, role: Role, opts: { fatigued?: boolean } = {}): Prescription | null {
+export function prescribe(trend: LiftTrend, role: Role, opts: { fatigued?: boolean; hold?: boolean } = {}): Prescription | null {
   const last = trend.last;
   if (!last) return null;
   let useRole = role;
@@ -140,7 +140,7 @@ export function prescribe(trend: LiftTrend, role: Role, opts: { fatigued?: boole
   const sameZone = last.repsAtTop >= lo - 1 && last.repsAtTop <= hi + 3;
   let target: number;
   if (sameZone) {
-    if (last.repsAtTop >= hi && trend.status !== "regressing" && !(opts.fatigued && lower)) {
+    if (last.repsAtTop >= hi && trend.status !== "regressing" && !(opts.fatigued && lower) && !opts.hold) {
       target = last.topWeight + inc;
       basis = `hit ${last.topWeight}x${last.repsAtTop} — add ${inc} lb`;
     } else if (last.repsAtTop >= lo) {
