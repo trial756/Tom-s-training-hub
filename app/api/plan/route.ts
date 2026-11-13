@@ -9,7 +9,7 @@ import { scheduleWeek, type DayLog } from "@/lib/planner/schedule";
 import { fitWeekToTargets, reconcileMileage } from "@/lib/planner/mileage";
 import { liftTrends } from "@/lib/planner/progression";
 import { applyStrengthRules } from "@/lib/planner/strengthRules";
-import { fillGaps } from "@/lib/planner/gaps";
+import { doneThisWeek, fillGaps, varyCore } from "@/lib/planner/gaps";
 import { isHard, validateWeek } from "@/lib/planner/validate";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
 import { loadGoals } from "@/lib/goalsStore";
@@ -207,22 +207,35 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         milesAlreadyRun: context.milesThisWeek,
       }).sessions;
       // Structure, loads, stall breakers and "new" tags are rules, not model output.
+      // What the days before planFrom actually did — logged workouts, not just
+      // the sessions the plan had there.
+      const done = doneThisWeek(
+        kept,
+        keptAssignments,
+        workouts
+          .map((w) => ({ date: localDateKey(new Date(w.logged_at)), exercises: w.exercises ?? [] }))
+          .filter((w) => w.date >= week && w.date < context.planFrom)
+      );
       const sessions = [
         ...kept,
         ...applyStrengthRules(
-          // Weekly floors for legs, power, mobility and hips (lib/planner/gaps.ts).
-          fillGaps(fitted, {
-            mode: context.strengthDose.mode,
-            daysToRace: context.marathon?.daysToRace ?? null,
-            recoveryWeek: !!context.marathon?.isRecoveryWeek,
-            afterRace: context.block.kind === "recovery",
-            alreadyThisWeek: kept,
-          }),
+          // Weekly floors for legs, power, mobility and hips, then no core
+          // movement more than twice a week (lib/planner/gaps.ts).
+          varyCore(
+            fillGaps(fitted, {
+              mode: context.strengthDose.mode,
+              daysToRace: context.marathon?.daysToRace ?? null,
+              recoveryWeek: !!context.marathon?.isRecoveryWeek,
+              afterRace: context.block.kind === "recovery",
+              alreadyThisWeek: done,
+            }),
+            done
+          ),
           {
           trends: liftTrends(workouts, today),
           knownNames: await loggedExerciseNames(),
           fatigued: context.fatigued,
-          alreadyThisWeek: kept,
+          alreadyThisWeek: [...kept, ...done.filter((s) => s.id.startsWith("logged-"))],
           }
         ),
       ];

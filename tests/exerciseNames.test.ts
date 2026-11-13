@@ -16,6 +16,8 @@ const SAME_LIFT = [
   ["EZ Bar Skull Crushers", "EZ-Bar Skull Crusher"],
   ["Narrow Grip Horizontal Cable Pull", "Horizontal Cable Pull"],
   ["Machine Incline Press", "Incline Machine Press"],
+  // Nov 13 2026: "Pecdec deltoid flys" is the rear-delt pec dec, not the chest one.
+  ["Rear Delt Fly", "Pecdec Deltoid Flys", "Pec Dec Deltoid Fly", "Reverse Pec Dec"],
 ];
 
 test("names of the same lift share one key", () => {
@@ -29,6 +31,8 @@ test("different lifts stay apart", () => {
     ["Dumbbell Incline Press", "Incline Barbell Bench Press"],
     ["Chest Supported T-Bar Row", "Chest Supported Lever Row"],
     ["Leg Curl", "Barbell Curl"],
+    ["Pecdec Deltoid Flys", "Pec Dec Fly"],
+    ["Cable Flys", "Pec Dec Fly"],
   ]) assert.notEqual(key(a), key(b), `${a} vs ${b}`);
 });
 

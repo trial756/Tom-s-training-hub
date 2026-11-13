@@ -26,8 +26,9 @@ export const EXERCISE_ALIASES: Record<string, string[]> = {
   "Romanian Deadlift": ["RDL", "Barbell RDL", "Barbell Romanian Deadlift"],
   "Bent Over Barbell Row": ["Barbell Row", "Bent-Over Row", "Bent Over Row"],
   "Narrow Grip Horizontal Cable Pull": ["Horizontal Cable Pull", "Seated Cable Row", "Narrow Grip Cable Row", "Cable Row"],
-  "Pec Dec Fly": ["Pec Dec Chest Fly", "Pec Deck Fly", "Pec Deck Chest Fly", "Pec Dec", "Pec Deck"],
-  "Rear Delt Fly": ["Pec Deck Rear Delt Fly", "Pec Dec Rear Delt Fly", "Reverse Pec Deck", "Machine Rear Delt Fly"],
+  "Pec Dec Fly": ["Pec Dec Chest Fly", "Pec Deck Fly", "Pec Deck Chest Fly", "Pec Dec", "Pec Deck", "Pecdec Fly", "Pecdec Chest Fly"],
+  // A pec dec turned around for the delts (Tom logs it "pecdec deltoid flys") is a rear delt fly, not a chest fly.
+  "Rear Delt Fly": ["Pec Deck Rear Delt Fly", "Pec Dec Rear Delt Fly", "Reverse Pec Deck", "Reverse Pec Dec", "Machine Rear Delt Fly", "Pec Dec Deltoid Fly", "Pecdec Deltoid Fly", "Pec Deck Deltoid Fly", "Pec Dec Delt Fly", "Pecdec Delt Fly"],
   "Cable Lateral Raise": ["Lateral Cable Raise"],
   "Single Arm Cable Lateral Raise": ["Single Arm Lateral Cable Raise", "Lateral Cable Raise (Single Arm)"],
   "Dumbbell Lateral Raise": ["Lateral Dumbbell Raise", "DB Lateral Raise", "Lateral Raise"],
