@@ -8,8 +8,8 @@ import { buildMarathonPlan, type PlanWeek } from "@/lib/marathonPlan";
 //   • race      — inside an A or B race's build (weeks counted back from
 //                 its date), with weekly mileage and long-run targets
 //   • recovery  — the week(s) right after a race
-//   • focus     — a "focus" goal is active (e.g. muscle & athleticism)
-//   • base      — nothing set: general fitness
+//   • focus     — a "focus" goal is active (e.g. muscle & athleticism);
+//                 with no goal set at all, muscle & athleticism is the goal
 // C races ("for fun") get no block of their own; they show up in
 // `upcoming` so the week around them eases off.
 
@@ -72,6 +72,18 @@ export const DEFAULT_GOALS: Goal[] = [
     status: "active",
   },
 ];
+
+/** What the training is for when no goal is set. */
+export const DEFAULT_FOCUS: Goal = {
+  id: "default-focus",
+  kind: "focus",
+  title: "Muscle & athleticism",
+  date: "",
+  priority: "A",
+  focus: "athleticism",
+  notes: "Hypertrophy plus power, speed, agility and conditioning. Running stays in as conditioning.",
+  status: "active",
+};
 
 export interface RaceBlock {
   planWeek: number;
@@ -245,11 +257,15 @@ export function blockForWeek(goals: Goal[], weekStart: string, todayKey: string)
     }
   }
 
-  // 2. Recovery after an A or B race. A Sunday race sits in the first day of
-  // the following training week, so that week counts as recovery.
-  for (const r of races.filter((x) => x.priority !== "C" && x.date <= weekEnd).reverse()) {
-    const weeksAfter = Math.floor(daysBetweenKeys(r.date, weekEnd) / 7);
-    if (weeksAfter < recoveryWeeks(r.distance_mi ?? 0)) {
+  // 2. Recovery after an A or B race: every week that starts within its
+  // recovery span (two weeks for a marathon, one for a half). A Sunday race
+  // sits in the first day of the following training week, so that week
+  // counts. A race marked done still gets its recovery.
+  const raced = goals
+    .filter((g) => g.kind === "race" && (g.status ?? "active") !== "dropped")
+    .sort((a, b) => a.date.localeCompare(b.date));
+  for (const r of raced.filter((x) => x.priority !== "C" && x.date <= weekEnd).reverse()) {
+    if (daysBetweenKeys(r.date, weekStart) < 7 * recoveryWeeks(r.distance_mi ?? 0)) {
       return {
         kind: "recovery",
         goal: r,
@@ -269,7 +285,8 @@ export function blockForWeek(goals: Goal[], weekStart: string, todayKey: string)
     return { kind: "focus", goal: focus, race: null, upcoming: upcomingFor(null), summary: focus.title };
   }
 
-  return { kind: "base", goal: null, race: null, upcoming: upcomingFor(null), summary: "General fitness" };
+  // 4. Nothing set: muscle and athleticism is the standing goal (Tom, Nov 2026).
+  return { kind: "focus", goal: { ...DEFAULT_FOCUS, date: weekStart }, race: null, upcoming: upcomingFor(null), summary: DEFAULT_FOCUS.title };
 }
 
 /** The next race with a date still ahead (any priority), for countdowns. */

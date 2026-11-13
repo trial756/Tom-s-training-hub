@@ -10,6 +10,7 @@ import { fitWeekToTargets, reconcileMileage } from "@/lib/planner/mileage";
 import { liftTrends } from "@/lib/planner/progression";
 import { applyStrengthRules } from "@/lib/planner/strengthRules";
 import { doneThisWeek, fillGaps, varyCore } from "@/lib/planner/gaps";
+import { applyRaceWeekRules, applyRecoveryRules, fixedSessionsFor, keepForOpenDays } from "@/lib/planner/raceDays";
 import { isHard, validateWeek } from "@/lib/planner/validate";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
 import { loadGoals } from "@/lib/goalsStore";
@@ -197,14 +198,28 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
       }
       if (context.daysRemaining === 0 && previous) return previous;
 
-      const generated = await generateWeekPlan(JSON.stringify(context, null, 2));
+      // Race day and the days around it are made in code and pinned to their
+      // dates (lib/planner/raceDays.ts); the model plans the days left over.
+      const fixed = fixedSessionsFor(goals, weekDatesFrom(week)).filter((s) => !kept.some((k) => k.id === s.id));
+      for (const s of fixed) keptAssignments[s.id] = s.fixedDate!;
+      const openDays = context.daysRemaining - (context.fixedDays?.length ?? 0);
+      const raceWeek = !!context.marathon?.isRaceWeek;
+
+      const generated =
+        openDays > 0
+          ? await generateWeekPlan(JSON.stringify(context, null, 2))
+          : { headline: context.block.summary, sessions: [] };
       // Fresh ids that can't collide with the sessions being kept.
       const tag = Date.now().toString(36);
-      const fresh = toSessions(generated.sessions ?? []).map((s) => (kept.length ? { ...s, id: `${s.id}-${tag}` } : s));
+      let fresh = toSessions(generated.sessions ?? []).map((s) => (kept.length ? { ...s, id: `${s.id}-${tag}` } : s));
+      fresh = keepForOpenDays(fresh, openDays);
+      if (raceWeek) fresh = applyRaceWeekRules(fresh);
+      const fixedEasyMiles = fixed.reduce((sum, s) => sum + (s.run?.type === "Race" ? 0 : s.miles ?? 0), 0);
       const fitted = fitWeekToTargets(fresh, {
         weeklyTarget: context.marathon?.weeklyMileage ?? null,
-        longRunMiles: context.marathon?.longRunMiles ?? null,
-        milesAlreadyRun: context.milesThisWeek,
+        // Race week has no long run.
+        longRunMiles: raceWeek ? null : context.marathon?.longRunMiles ?? null,
+        milesAlreadyRun: context.milesThisWeek + fixedEasyMiles,
       }).sessions;
       // Structure, loads, stall breakers and "new" tags are rules, not model output.
       // What the days before planFrom actually did — logged workouts, not just
@@ -216,9 +231,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
           .map((w) => ({ date: localDateKey(new Date(w.logged_at)), exercises: w.exercises ?? [] }))
           .filter((w) => w.date >= week && w.date < context.planFrom)
       );
-      const sessions = [
-        ...kept,
-        ...applyStrengthRules(
+      const ruled = applyStrengthRules(
           // Weekly floors for legs, power, mobility and hips, then no core
           // movement more than twice a week (lib/planner/gaps.ts).
           varyCore(
@@ -237,7 +250,13 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
           fatigued: context.fatigued,
           alreadyThisWeek: [...kept, ...done.filter((s) => s.id.startsWith("logged-"))],
           }
-        ),
+        );
+      const sessions = [
+        ...kept,
+        ...fixed,
+        // Recovery weeks: easy runs within the caps, legs out or light — after the
+        // strength rules, so their loads can't put heavy legs back.
+        ...(context.recovery ? applyRecoveryRules(ruled, context.recovery) : ruled),
       ];
       const row = {
         week_start: week,

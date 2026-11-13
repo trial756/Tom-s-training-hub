@@ -1,3 +1,4 @@
+import { fixedSessionsFor, recoveryCapsFor } from "@/lib/planner/raceDays";
 import { daysBetweenKeys, localDateKey, normalizeExerciseName, shiftDays, startOfLocalDay, startOfWeekSunday } from "@/lib/format";
 import { MUSCLE_LABELS, MUSCLE_REGIONS, type MuscleRegion } from "@/lib/muscles";
 import { buildExerciseLookup, computeMuscleActivity, type ExerciseLookup } from "@/lib/muscleCoverage";
@@ -242,10 +243,15 @@ export function buildPlannerContext(opts: {
   const fatigued =
     roughRuns >= 2 || (!!marathon && avgWeeklyMiles > 0 && marathon.weeklyMileage >= avgWeeklyMiles * 1.3);
 
+  // Recovery weeks: run limits by race distance and how long ago it was.
+  const recoveryCaps =
+    blockInfo.kind === "recovery" && g ? recoveryCapsFor(g.date, g.distance_mi ?? 26.2, weekStart) : null;
+
   const strengthDose = strengthDoseFor({
     marathon,
     block: { kind: block.kind, focus: block.goal?.focus ?? null },
     liftDaysPerWeek,
+    recoveryPhase: recoveryCaps?.phase ?? null,
   });
 
   // Today is already spoken for once anything is logged on it — a replan
@@ -262,7 +268,15 @@ export function buildPlannerContext(opts: {
   const liftDaysDone = new Set(
     opts.workouts.map((w) => localDateKey(new Date(w.logged_at))).filter((d) => d >= weekStart && d < fromKey)
   ).size;
-  const remainingDose =
+  // Days pinned in code (race day, the shakeout, the no-run days after):
+  // the model plans the other days only.
+  const weekDates = Array.from({ length: 7 }, (_, i) => localDateKey(shiftDays(weekStartDate, i)));
+  const fixedDays = fixedSessionsFor(opts.goals?.length ? opts.goals : DEFAULT_GOALS, weekDates)
+    .filter((s) => (s.fixedDate ?? "") >= fromKey)
+    .map((s) => ({ date: s.fixedDate!, title: s.title }));
+  const openDays = Math.max(0, daysRemaining - fixedDays.length);
+
+  const netDose =
     liftDaysDone > 0
       ? {
           ...strengthDose,
@@ -272,6 +286,7 @@ export function buildPlannerContext(opts: {
             "the count above is what's left — plan around what was trained, not over it.",
         }
       : strengthDose;
+  const remainingDose = { ...netDose, liftSessions: Math.min(netDose.liftSessions, openDays) };
 
   return {
     today: todayKey,
@@ -280,6 +295,17 @@ export function buildPlannerContext(opts: {
     daysRemaining,
     planFrom: fromKey,
     block,
+    ...(fixedDays.length ? { fixedDays } : {}),
+    ...(recoveryCaps
+      ? {
+          recovery: {
+            ...recoveryCaps,
+            note:
+              `Easy runs only, at most ${recoveryCaps.maxRunMiles} mi each and ${recoveryCaps.maxWeekMiles} mi for the week ` +
+              "(code enforces both). No workouts, no long run.",
+          },
+        }
+      : {}),
     marathon,
     milesThisWeek,
     milesRemaining: marathon ? Math.max(0, Math.round((marathon.weeklyMileage - milesThisWeek) * 10) / 10) : 0,

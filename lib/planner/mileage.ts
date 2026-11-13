@@ -63,7 +63,8 @@ export function reconcileMileage(opts: {
   const upcoming = days.filter((d) => d.date >= today && d.status !== "done");
   const plannedRemaining = upcoming.reduce((sum, d) => {
     const s = d.sessionId ? byId.get(d.sessionId) : undefined;
-    return sum + (s && isRun(s) ? s.miles ?? 0 : 0);
+    // The race itself isn't training mileage.
+    return sum + (s && isRun(s) && s.run?.type !== "Race" ? s.miles ?? 0 : 0);
   }, 0);
 
   // What this week can safely reach, which may be well under the block's ask.
@@ -95,7 +96,7 @@ export function reconcileMileage(opts: {
   for (const day of upcoming) {
     if (remaining < MIN_GAP_MILES) break;
     const session = day.sessionId ? byId.get(day.sessionId) : undefined;
-    if (!session || !isRun(session) || session.taxesLegs) continue;
+    if (!session || !isRun(session) || session.taxesLegs || session.fixedDate) continue;
     const bump = Math.min(remaining, Math.max(1, Math.round((session.miles ?? runSize) * 0.5)));
     session.miles = Math.round(((session.miles ?? 0) + bump) * 10) / 10;
     session.title = `${session.title.replace(/\s*\d+(\.\d+)?mi\b/, "")} ${session.miles}mi`.replace(/\s+/g, " ").trim();
@@ -110,7 +111,8 @@ export function reconcileMileage(opts: {
   for (const day of upcoming) {
     if (remaining < MIN_GAP_MILES) break;
     const session = day.sessionId ? byId.get(day.sessionId) : undefined;
-    if (session && session.kind !== "rest" && session.kind !== "active_recovery") continue;
+    // Days pinned in code (the walk before a race, the no-run days after) stay as they are.
+    if (session && (session.fixedDate || (session.kind !== "rest" && session.kind !== "active_recovery"))) continue;
     const miles = Math.min(remaining, runSize);
     const id = `add-${day.date}`;
     // The run joins whatever light work the day already had ("Easy 4mi +

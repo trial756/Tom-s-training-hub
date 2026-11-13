@@ -832,8 +832,9 @@ function frameFor(context: Partial<PlannerContext>): string {
   if (block?.kind === "recovery" && g) {
     return (
       `You are a strength and running coach ${lead}The athlete has just raced ${g.title} (${g.date}). This is ` +
-      "recovery: short easy runs only (no long run, no workouts), light upper-body and core lifting, plenty of " +
-      "mobility. Every day still gets a session, but none should leave soreness.\n\n"
+      "recovery: short easy runs only (no long run, no workouts — `recovery` in the data gives the limits, which " +
+      "code enforces), light upper-body and core lifting per the strengthDose, plenty of mobility. Not every day " +
+      "needs a run: a walk with mobility is a full day's work this week. Nothing should leave soreness.\n\n"
     );
   }
   if (block?.kind === "focus" && g) {
@@ -857,7 +858,9 @@ async function requestWeekPlan(contextJson: string, frame: string, extra: string
       "Every day is a training day: no rest days and no blank days. Plan one session for each remaining day " +
       "(planFrom through weekEnd — earlier days, today included once it's logged, are done and only shape the " +
       "rest: build on loggedThisWeek rather than repeating it), " +
-      "and get the most out of each one — the athlete wants to optimise limited time, not spread it thin.\n\n" +
+      "and get the most out of each one — the athlete wants to optimise limited time, not spread it thin. " +
+      "Days listed in fixedDays are already set in code (race day, the shakeout before it, the no-run days " +
+      "after): don't plan a session for them, and plan the days around them to suit.\n\n" +
       "Stack the light work. An easy run never stands alone: give it a mobility, yoga, stretching, core or " +
       "small-muscle accessory block in the same session (kind 'run', with the block as its exercises). Never " +
       "give mobility or yoga a day of its own when an easy run could carry it — the day that frees goes to a " +
@@ -891,8 +894,8 @@ async function requestWeekPlan(contextJson: string, frame: string, extra: string
       "- Every entry in 'adjustments' is a reason to change this week — act on each one (lighter lower work, " +
       "a gentler opening, a reintroduction at moderate load) and say so in the affected session's rationale.\n" +
       "- Bias toward what the data says is neglected, and don't repeat what plannedBeforeWeek already covers.\n" +
-      "- Prefer movements from the anchor list. Introduce a new one only when it serves the week better than " +
-      "anything familiar, and give it one short form cue.\n\n" +
+      "- Choose whatever movement best serves the goal, familiar or not. The anchor list shows what has history; " +
+      "it is not a menu. New exercises are welcome whenever they do the job better — give each one short form cue.\n\n" +
       "Recovery comes from easy days being genuinely easy, not from days off: keep the add-ons on easy days " +
       "light and keep leg-taxing work off the days around the long run.\n\n" +
       todayContext(),

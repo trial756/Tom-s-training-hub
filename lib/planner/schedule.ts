@@ -28,10 +28,10 @@ function runMatched(session: PlanSession, log: DayLog): boolean {
   if (!planned || !KEY_RUN_TYPES.has(planned.type)) return true;
   const runs = log.runs ?? [];
   if (runs.length === 0) return true; // no detail — give it the benefit
+  // A long run or a race also counts on distance, whatever label it was logged under.
+  const byDistance = planned.type === "Long" || planned.type === "Race";
   return runs.some(
-    (r) =>
-      r.type === planned.type ||
-      (planned.type === "Long" && planned.miles != null && r.miles != null && r.miles >= planned.miles * 0.8)
+    (r) => r.type === planned.type || (byDistance && planned.miles != null && r.miles != null && r.miles >= planned.miles * 0.8)
   );
 }
 
@@ -180,10 +180,17 @@ export function scheduleWeek(opts: {
     consumed.add(todayPrior.id);
   }
 
+  // Sessions pinned to a date (race day, the days around it) take that day
+  // and no other; one whose date has passed is never moved to a later day.
+  for (const s of sessions) {
+    if (!s.fixedDate || consumed.has(s.id)) continue;
+    if (s.fixedDate >= today && weekDates.includes(s.fixedDate) && !assignment.has(s.fixedDate)) assignment.set(s.fixedDate, s.id);
+  }
+
   // ── Place what's left on the days that remain ─────────────────────────
   const openDays = weekDates.filter((d) => d >= today && !assignment.has(d));
   const pending = sessions
-    .filter((s) => !s.frozen && !consumed.has(s.id) && !Array.from(assignment.values()).includes(s.id))
+    .filter((s) => !s.frozen && !s.fixedDate && !consumed.has(s.id) && !Array.from(assignment.values()).includes(s.id))
     .sort((a, b) => a.priority - b.priority);
 
   const dowOf = (date: string) => new Date(`${date}T00:00:00`).getDay();
