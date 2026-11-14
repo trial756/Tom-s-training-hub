@@ -1,4 +1,6 @@
+import { coachingFrameFor } from "@/lib/coachingFrame";
 import { EXERCISE_ALIASES, canonicalExerciseName } from "@/lib/exerciseNames";
+import { loadGoals } from "@/lib/goalsStore";
 import Anthropic from "@anthropic-ai/sdk";
 import { APP_TIMEZONE, formatDuration, formatPace } from "@/lib/format";
 import { describeIntervals } from "@/lib/intervals";
@@ -336,8 +338,8 @@ const runCoachingSchema = {
     coaching_feedback: {
       type: "string",
       description:
-        "2-4 sentences of specific, encouraging coaching feedback on THIS run in isolation, relative to marathon " +
-        "training (goal: 3:30 marathon, ~8:01/mi race pace) — pace discipline and effort relative to " +
+        "2-4 sentences of specific, encouraging coaching feedback on THIS run in isolation, relative to what the " +
+        "athlete is training for (stated in the system prompt) — pace discipline and effort relative to " +
         "conditions/terrain/elevation. Do not compare to prior runs here — that belongs in vs_last_time.",
     },
     estimated_calories: {
@@ -349,9 +351,9 @@ const runCoachingSchema = {
     pace_note: {
       type: ["string", "null"],
       description:
-        "One sentence assessing today's average pace relative to the 8:01/mi marathon goal pace, appropriate to " +
-        "the run type — e.g. easy/long runs should be slower than goal pace by design, that's correct pacing, not " +
-        "a problem; tempo/marathon-pace/interval runs should be judged against their own target zones. If an " +
+        "One sentence assessing today's average pace the way the system prompt says to judge pace this week, " +
+        "appropriate to the run type — e.g. easy/long runs are slower than any goal pace by design, that's correct " +
+        "pacing, not a problem; tempo/marathon-pace/interval runs are judged against their own target zones. If an " +
         "interval breakdown is provided, judge the work/rep paces rather than the session average (which is " +
         "blended with recovery and warmup and means little on its own). Null if no pace was recorded.",
     },
@@ -399,6 +401,7 @@ export async function generateRunCoaching(
   historyContext: string,
   planNote?: string | null
 ): Promise<RunCoachingResult> {
+  const frame = coachingFrameFor(await loadGoals());
   const result = await parseWithTool<{
     coaching_feedback: string;
     estimated_calories: number | null;
@@ -409,16 +412,16 @@ export async function generateRunCoaching(
     weekly_note: string | null;
   }>({
     system:
-      "You are a marathon running coach. The athlete is training for a 3:30:00 marathon (goal pace 8:01/mi) and " +
-      "logged a run using precise structured fields from their watch/app — everything below is already extracted, " +
-      "there is nothing left to parse. Give brief, specific coaching feedback grounded in the exact numbers " +
-      "provided, and a note on pace relative to goal pace where applicable. You'll also be given a list of the " +
+      `${frame.intro} ${frame.pace}\n\n` +
+      "The athlete logged a run using precise structured fields from their watch/app — everything below is already " +
+      "extracted, there is nothing left to parse. Give brief, specific coaching feedback grounded in the exact " +
+      "numbers provided, and a note on pace as described above. You'll also be given a list of the " +
       "athlete's recent past runs (most recent first) — use it to find the most relevant prior run (same run type " +
       "is the strongest match) and write a 'vs last time' comparison grounded in specific numbers from both, plus " +
       "concrete adjustments for next time.\n\n" +
       "If an interval breakdown is present, coach the session on its own terms: comment on rep pace consistency " +
       "across the sets, whether the recovery was proportionate to the work, and how the work pace sits relative " +
-      "to the athlete's threshold and goal marathon pace. Not every field is filled in on every run — work with " +
+      "to the athlete's threshold (and goal pace, when there is one). Not every field is filled in on every run — work with " +
       "what's provided and never ask for or complain about missing data.\n\n" +
       "You may be told what the training plan had for that day. The run type the athlete logged is what they " +
       "actually did: coach that run on its own terms — an easy run judged as an easy run, not as a failed tempo. " +
@@ -607,10 +610,12 @@ export async function summarizeTraining(input: {
       : `Meal logging coverage this period is good (${input.daysWithMealsLogged}/${input.totalDaysInRange} days, ` +
         `${coveragePct}%) — no need to comment on logging consistency.`;
 
+  const frame = coachingFrameFor(await loadGoals());
   return parseWithTool<TrainingSummary>({
     system:
-      "You are a marathon training coach writing a periodic review for an athlete training for a 3:30:00 marathon " +
-      "(goal pace 8:01/mi). Review their logged workouts, runs, and meals for the period and write an encouraging, " +
+      `${frame.intro} ${frame.pace}\n\n` +
+      "You are writing a periodic review. Judge the period against that goal — lifting, running and eating each " +
+      "in proportion to what the goal needs. Review their logged workouts, runs, and meals and write an encouraging, " +
       "specific, non-generic summary grounded in the actual numbers provided — avoid vague platitudes.\n\n" +
       todayContext(),
     userText:

@@ -11,7 +11,6 @@ import type { IntervalSet, Run, RunIntervals } from "@/lib/types";
 import { FEEL_CHIPS, RUN_TYPES } from "@/lib/types";
 import { formatDuration, formatLoggedAt, formatPace, localDateKey, loggedAtFor } from "@/lib/format";
 import { notifyDataChanged } from "@/lib/refresh";
-import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
 import { digitsToClock, parseClock, secondsToDigits } from "@/lib/clock";
 import type { WeekPlan } from "@/lib/planner/types";
 import { formatPaceRange, plannedRunFor, runPrefillQuery, type PlannedRun } from "@/lib/planner/runPlan";
@@ -35,12 +34,16 @@ const RUN_TYPE_COLORS: Record<string, string> = {
 
 
 
-// Goal marathon pace is 8:01/mi (481s). Green = at or ahead of goal, amber =
-// within 60s of it, red = more than 60s slower. Applied uniformly regardless
-// of run type, matching the reference artifact's simple at-a-glance coding.
+// The goal pace of the race being trained for (from /api/goals), or null
+// outside a race block — set once the page loads.
+let goalPace: number | null = null;
+
+// Green = at or ahead of goal pace, amber = within 60s of it, red = more than
+// 60s slower. With no race goal (recovery, a focus block) pace isn't coloured:
+// there is nothing to be ahead of or behind.
 function paceColorClass(paceSecondsPerMile: number | null | undefined): string {
-  if (!paceSecondsPerMile) return "text-gray-300";
-  const diff = paceSecondsPerMile - GOAL_PACE_SECONDS_PER_MILE;
+  if (!paceSecondsPerMile || !goalPace) return "text-gray-300";
+  const diff = paceSecondsPerMile - goalPace;
   if (diff <= 0) return "text-accent";
   if (diff <= 60) return "text-fuel";
   return "text-danger";
@@ -106,6 +109,17 @@ function runToForm(r: Run): FormState {
 }
 
 export default function RunsPage() {
+  const [, setGoalPace] = useState<number | null>(goalPace);
+  useEffect(() => {
+    fetch("/api/goals", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j) return;
+        goalPace = typeof j.goalPace === "number" ? j.goalPace : null;
+        setGoalPace(goalPace);
+      })
+      .catch(() => {});
+  }, []);
   const [date, setDate] = useState(todayISO());
   const [runType, setRunType] = useState<string>("");
   const [feel, setFeel] = useState<string>("");

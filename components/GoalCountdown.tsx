@@ -25,8 +25,10 @@ export default function GoalCountdown() {
   useRefreshOn(load, { kinds: ["run"] });
 
   if (!state) return null;
-  const race = state.nextRace;
   const today = localDateKey(new Date());
+  // A for-fun race never takes the headline from the goal the week is for.
+  const fun = state.nextRace?.priority === "C" ? state.nextRace : null;
+  const race = fun ? null : state.nextRace;
   return (
     <Link href="/goals" className="card flex items-center justify-between gap-3 bg-gradient-to-r from-accent/20 to-transparent">
       <div className="min-w-0">
@@ -34,6 +36,11 @@ export default function GoalCountdown() {
         <p className="text-lg font-bold text-white">
           {race ? `${Math.max(0, daysBetweenKeys(today, race.date))} days to go` : state.block.summary}
         </p>
+        {fun && (
+          <p className="text-xs text-muted">
+            {fun.title} in {Math.max(0, daysBetweenKeys(today, fun.date))} days, for fun
+          </p>
+        )}
       </div>
       <p className="shrink-0 text-sm font-semibold text-accent">
         {race?.target_seconds ? `Goal ${digitsToClock(secondsToDigits(race.target_seconds))} →` : "Goals →"}
