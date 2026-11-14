@@ -9,7 +9,6 @@ import WeightCard from "@/components/WeightCard";
 import WaterTrend from "@/components/WaterTrend";
 import Spinner from "@/components/Spinner";
 import { formatPace, formatMinutes } from "@/lib/format";
-import { GOAL_PACE_SECONDS_PER_MILE } from "@/lib/marathonPlan";
 import ChartFrame from "@/components/charts/ChartFrame";
 import ChartCarousel from "@/components/charts/ChartCarousel";
 import { notifyDataChanged, useRefreshOn } from "@/lib/refresh";
@@ -65,6 +64,7 @@ export default function ProgressPage() {
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [trends, setTrends] = useState<TrendsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [goalPace, setGoalPace] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [summary, setSummary] = useState<TrainingSummary | null>(null);
@@ -95,6 +95,14 @@ export default function ProgressPage() {
   // Stats reload on any log; nothing here regenerates the AI summary, which
   // costs a call and stays on-demand.
   useRefreshOn(() => loadStats(range, true), { kinds: ["workout", "run", "meal"] });
+
+  // The goal-pace line only shows while a race with a goal time is being trained for.
+  useEffect(() => {
+    fetch("/api/goals", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setGoalPace(typeof j?.goalPace === "number" ? j.goalPace : null))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     loadStats(range);
@@ -324,8 +332,8 @@ export default function ProgressPage() {
                     },
                   ]}
                   formatValue={(v) => formatPace(v)}
-                  referenceValue={GOAL_PACE_SECONDS_PER_MILE}
-                  referenceLabel="8:01 goal"
+                  referenceValue={goalPace}
+                  referenceLabel={goalPace ? `${formatPace(goalPace)} goal` : undefined}
                 />
               </ChartFrame>
 

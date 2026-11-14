@@ -19,7 +19,7 @@ import {
   type PlanPhase,
   type PlanWeek,
 } from "@/lib/marathonPlan";
-import { daysBetweenKeys, formatPace, formatShortDate, localDateKey } from "@/lib/format";
+import { daysBetweenKeys, formatDuration, formatPace, formatShortDate, localDateKey } from "@/lib/format";
 import type { Run } from "@/lib/types";
 import ChartFrame from "@/components/charts/ChartFrame";
 import GoalReadiness from "@/components/GoalReadiness";
@@ -106,6 +106,16 @@ export default function MarathonPage() {
 
   const raceDate = new Date(`${RACE_DATE}T00:00:00`);
   const daysToRace = daysBetweenKeys(localDateKey(new Date()), RACE_DATE);
+  // Once race day has passed the page is the record of the build: the result
+  // (the run logged that day covering the distance) replaces the countdown.
+  const raceRun = useMemo(
+    () =>
+      runs
+        .filter((r) => localDateKey(new Date(r.logged_at)) === RACE_DATE && (Number(r.distance_miles) || 0) >= 21)
+        .sort((a, b) => (Number(b.distance_miles) || 0) - (Number(a.distance_miles) || 0))[0] ?? null,
+    [runs]
+  );
+  const raceOver = daysToRace < 0 || !!raceRun;
 
   function togglePhase(phase: PlanPhase) {
     setExpandedPhases((prev) => {
@@ -129,7 +139,7 @@ export default function MarathonPage() {
 
   return (
     <div>
-      <PageHeader title="Marathon Plan" subtitle="27 weeks to race day." />
+      <PageHeader title="Marathon Plan" subtitle={raceOver ? "The 27-week build, for the record." : "27 weeks to race day."} />
 
       <div className="px-4">
         <div className="card bg-gradient-to-br from-base-900 to-black">
@@ -140,10 +150,21 @@ export default function MarathonPage() {
                 {raceDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
               </p>
             </div>
-            <div className="text-right">
-              <p className="text-3xl font-bold text-accent">{daysToRace > 0 ? daysToRace : 0}</p>
-              <p className="text-xs text-gray-500">days to go</p>
-            </div>
+            {raceOver ? (
+              <div className="text-right">
+                <p className="text-3xl font-bold text-accent">
+                  {raceRun?.duration_seconds ? formatDuration(raceRun.duration_seconds) : "Done"}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {raceRun?.pace_seconds_per_mile ? `${formatPace(raceRun.pace_seconds_per_mile)} · finished` : "race run"}
+                </p>
+              </div>
+            ) : (
+              <div className="text-right">
+                <p className="text-3xl font-bold text-accent">{daysToRace > 0 ? daysToRace : 0}</p>
+                <p className="text-xs text-gray-500">{daysToRace === 0 ? "race day" : "days to go"}</p>
+              </div>
+            )}
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 border-t border-base-700 pt-3">
             <div>
@@ -158,7 +179,7 @@ export default function MarathonPage() {
         </div>
       </div>
 
-      {!loadingRuns && runs.length > 0 && (
+      {!raceOver && !loadingRuns && runs.length > 0 && (
         <div className="mt-4 px-4">
           <GoalReadiness readiness={readiness} goalTime={GOAL_TIME} />
         </div>
