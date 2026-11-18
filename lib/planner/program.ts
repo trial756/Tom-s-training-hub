@@ -224,6 +224,9 @@ const TOP_UP: Record<MuscleGroup, { name: string; reps: string; regions: PlanExe
   calves: { name: "Seated Calf Raise", reps: "10-12", regions: ["calves"] },
 };
 
+/** The movements the volume top-up can add (each has a how-to in lib/exerciseCues). */
+export const TOP_UP_NAMES = Object.values(TOP_UP).map((t) => t.name);
+
 /** Hard sets per muscle group across the sessions (compounds give half credit to the arms). */
 export function weeklySets(sessions: PlanSession[]): Record<MuscleGroup, number> {
   const t: Record<MuscleGroup, number> = { chest: 0, back: 0, shoulders: 0, quads: 0, hamstrings: 0, biceps: 0, triceps: 0, calves: 0 };

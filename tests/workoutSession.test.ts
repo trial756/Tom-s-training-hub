@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { completedExercises, firstNumber, restFor, workoutFromSession, workoutText } from "../lib/workoutSession";
+import { completedExercises, elapsedMinutes, emptyWorkout, firstNumber, pauseWorkout, restFor, resumeWorkout, workoutFromSession, workoutText } from "../lib/workoutSession";
 import type { PlanSession } from "../lib/planner/types";
 import { liftTitleFor } from "../lib/planner/runPlan";
 
@@ -90,4 +90,32 @@ test("holds are timed: seconds, each side where it applies, logged as seconds", 
 
 test("a run day's lift title leaves the miles to the run", () => {
   assert.equal(liftTitleFor({ ...session, kind: "run", title: "Easy run + core & hips 8mi" }), "core & hips");
+});
+
+// Tom, Nov 2026: part of a workout at the gym, the rest at home — he had to
+// finish and log at the gym, then do the rest off the app.
+test("a paused workout stops the clock and resumes where it left off", () => {
+  const t0 = 1_000_000;
+  let w: ReturnType<typeof emptyWorkout> = { ...emptyWorkout("2026-11-18"), startedAt: t0, restEndsAt: t0 + 60_000, restTotal: 90 };
+  w = pauseWorkout(w, t0 + 30 * 60_000);
+  assert.equal(w.restEndsAt, null, "rest dropped when paused");
+  assert.equal(elapsedMinutes(w, t0 + 4 * 3600_000), 30, "the clock is stopped while paused");
+  assert.equal(pauseWorkout(w, t0 + 31 * 60_000), w, "pausing twice changes nothing");
+  w = resumeWorkout(w, t0 + 4 * 3600_000);
+  assert.equal(w.pausedAt, null);
+  assert.equal(elapsedMinutes(w, t0 + 4 * 3600_000 + 20 * 60_000), 50, "30 min at the gym + 20 at home");
+});
+
+test("every planned exercise brings its how-to into workout mode", () => {
+  const session = {
+    id: "s", kind: "lift" as const, title: "Upper", rationale: "", regions: [], priority: 1, preferredDow: null, taxesLegs: false, miles: null,
+    exercises: [
+      { name: "Landmine Press", sets: 3, reps: "8-10", target: null, cue: "Kneel, press the bar up and away.", isNew: true, regions: [] },
+      { name: "Barbell Bench Press", sets: 3, reps: "5-6", target: "185 lb", cue: "Shoulder blades back.", isNew: false, regions: [] },
+    ],
+  };
+  const w = workoutFromSession(session, "2026-11-18", "Upper");
+  assert.equal(w.exercises[0].cue, "Kneel, press the bar up and away.");
+  assert.equal(w.exercises[0].isNew, true);
+  assert.equal(w.exercises[1].cue, "Shoulder blades back.");
 });

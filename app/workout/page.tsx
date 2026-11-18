@@ -10,6 +10,9 @@ import { postOrQueue } from "@/lib/outbox";
 import {
   completedExercises,
   elapsedMinutes,
+  elapsedMs,
+  pauseWorkout,
+  resumeWorkout,
   emptyWorkout,
   loadActiveWorkout,
   newExercise,
@@ -160,6 +163,7 @@ export default function WorkoutPage() {
 
   const total = w.exercises.reduce((n, e) => n + e.sets.length, 0);
   const done = w.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0);
+  const paused = !!w.pausedAt;
 
   function setField(exId: string, i: number, field: "weight" | "reps", value: string) {
     update((x) => ({
@@ -188,6 +192,7 @@ export default function WorkoutPage() {
 
   function startHold(exId: string, i: number) {
     ensureAudio();
+    if (paused) update((x) => resumeWorkout(x));
     update((x) => {
       const ex = x.exercises.find((e) => e.id === exId)!;
       const seconds = Number(ex.sets[i].reps) || 30;
@@ -203,6 +208,8 @@ export default function WorkoutPage() {
 
   function toggleSet(exId: string, i: number) {
     ensureAudio();
+    // Ticking a set picks a paused workout back up.
+    if (paused) update((x) => resumeWorkout(x));
     update((x) => {
       const ex = x.exercises.find((e) => e.id === exId)!;
       const wasDone = ex.sets[i].done;
@@ -303,13 +310,37 @@ export default function WorkoutPage() {
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-bold text-ink">{w.title}</h1>
           <p className="text-sm text-muted">
-            {clock((now - w.startedAt) / 1000)} · {done}/{total} sets
+            {clock(elapsedMs(w, now) / 1000)}
+            {paused ? " · paused" : ""} · {done}/{total} sets
           </p>
         </div>
-        <Link href="/" className="min-h-[44px] shrink-0 pt-2 text-sm text-faint">
-          Hide
-        </Link>
+        <div className="flex shrink-0 items-start gap-1">
+          {!paused && (
+            <button type="button" className="min-h-[44px] rounded-xl border border-base-600 px-3 text-sm text-muted" onClick={() => update((x) => pauseWorkout(x))}>
+              Pause
+            </button>
+          )}
+          <Link href="/" className="flex min-h-[44px] items-center px-2 text-sm text-faint">
+            Hide
+          </Link>
+        </div>
       </div>
+
+      {paused && (
+        <div className="card mb-3 space-y-3 border-fuel/50">
+          <div>
+            <p className="text-base font-semibold text-ink">Paused</p>
+            <p className="text-sm text-muted">
+              {done}/{total} sets done. Everything is saved on this phone and the clock is stopped, so carry on
+              later — at home, after work, whenever. Tap Resume (or tick a set) to pick it back up, then Finish &amp; log
+              once at the end.
+            </p>
+          </div>
+          <button type="button" className="btn-primary min-h-[48px] w-full" onClick={() => update((x) => resumeWorkout(x))}>
+            Resume
+          </button>
+        </div>
+      )}
 
       <div className="space-y-3">
         {w.exercises.map((e) => {
@@ -320,7 +351,12 @@ export default function WorkoutPage() {
                 <p className="text-base font-semibold text-ink">{e.name}</p>
                 {e.target && <p className="text-xs text-muted">Plan: {e.target}</p>}
                 {e.note && <p className="text-xs text-accent">{e.note}</p>}
-                {e.cue && <p className="text-xs text-faint">New: {e.cue}</p>}
+                {e.cue && (
+                  <p className={`mt-1 text-xs leading-snug ${e.isNew ? "text-gray-300" : "text-faint"}`}>
+                    {e.isNew && <span className="font-semibold text-accent">New · how: </span>}
+                    {e.cue}
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 {e.timed && (

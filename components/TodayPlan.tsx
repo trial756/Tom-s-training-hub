@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loadActiveWorkout, saveActiveWorkout, workoutFromSession } from "@/lib/workoutSession";
@@ -267,14 +267,19 @@ export default function TodayPlan({
                     {ex.target ? ` · ${ex.target}` : ""}
                   </span>
                 </div>
-                {ex.cue && <p className="mt-1 text-[11px] leading-snug text-faint">{ex.cue}</p>}
+                {ex.cue && (
+                  <p className={`mt-1 text-xs leading-snug ${ex.isNew ? "text-gray-300" : "text-faint"}`}>
+                    {ex.isNew && <span className="font-semibold text-accent">How: </span>}
+                    {ex.cue}
+                  </p>
+                )}
                 {ex.note && <p className="mt-1 text-[11px] leading-snug text-muted">{ex.note}</p>}
               </li>
             ))}
           </ul>
         )}
 
-        {canLog && isToday && session.exercises.length > 0 && !selected?.loggedLift && (
+        {canLog && isToday && session.exercises.length > 0 && (!selected?.loggedLift || hasActiveWorkout()) && (
           <StartWorkoutButton session={session} date={selected.date} />
         )}
 
@@ -319,9 +324,14 @@ export default function TodayPlan({
 export type { PlanDay };
 
 /** One half of a day's session — a ✓ once that half is logged, so the other stays reachable. */
+/** A workout started or paused on this phone (it may already have logged its first half). */
+const hasActiveWorkout = () => typeof window !== "undefined" && !!loadActiveWorkout();
+
 /** Opens workout mode with today's exercises, or the workout already under way. */
 function StartWorkoutButton({ session, date }: { session: PlanSession; date: string }) {
   const router = useRouter();
+  const [active, setActive] = useState(false);
+  useEffect(() => setActive(!!loadActiveWorkout()), []);
   return (
     <button
       type="button"
@@ -334,7 +344,7 @@ function StartWorkoutButton({ session, date }: { session: PlanSession; date: str
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M7 4.5v15l12-7.5-12-7.5Z" />
       </svg>
-      Start workout
+      {active ? "Resume workout" : "Start workout"}
     </button>
   );
 }

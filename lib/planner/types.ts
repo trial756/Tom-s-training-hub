@@ -11,7 +11,7 @@ export interface PlanExercise {
   reps: string; // a range, e.g. "6-8"
   /** Suggested load, anchored to the last top set where there's history. */
   target: string | null;
-  /** One-line form cue — only populated for movements with no history. */
+  /** How to do it: two short sentences for a new movement, a one-line reminder for a familiar one. */
   cue: string | null;
   isNew: boolean;
   regions: MuscleRegion[];
