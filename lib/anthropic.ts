@@ -762,9 +762,12 @@ const weekPlanSchema = {
                     "so it only matters for movements without history. Null for bodyweight movements.",
                 },
                 cue: {
-                  type: ["string", "null"],
+                  type: "string",
                   description:
-                    "One short form cue, ONLY for movements the athlete has never logged. Null for familiar lifts.",
+                    "How to do it, in plain words, so the athlete never has to look it up. For a movement not in the " +
+                    "anchor list: two short sentences — the setup, then the movement and its one key point (about 30 " +
+                    "words, never more than 40). For a familiar lift: one short reminder of the key point (under 12 " +
+                    "words). No essays, no muscle lists.",
                 },
                 is_new: { type: "boolean", description: "True if this movement is not in the anchor list." },
                 regions: { type: "array", items: { type: "string", enum: [...MUSCLE_REGIONS] } },
@@ -902,7 +905,7 @@ async function requestWeekPlan(contextJson: string, frame: string, extra: string
       "a gentler opening, a reintroduction at moderate load) and say so in the affected session's rationale.\n" +
       "- Bias toward what the data says is neglected, and don't repeat what plannedBeforeWeek already covers.\n" +
       "- Choose whatever movement best serves the goal, familiar or not. The anchor list shows what has history; " +
-      "it is not a menu. New exercises are welcome whenever they do the job better — give each one short form cue.\n\n" +
+      "it is not a menu. New exercises are welcome whenever they do the job better — every exercise gets its cue (how to do it).\n\n" +
       "Recovery comes from easy days being genuinely easy, not from days off: keep the add-ons on easy days " +
       "light and keep leg-taxing work off the days around the long run.\n\n" +
       todayContext(),

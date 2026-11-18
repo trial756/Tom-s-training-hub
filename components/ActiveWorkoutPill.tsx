@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { loadActiveWorkout, type ActiveWorkout } from "@/lib/workoutSession";
+import { elapsedMs, loadActiveWorkout, type ActiveWorkout } from "@/lib/workoutSession";
 
 /** A way back into a workout in progress from anywhere in the app. */
 export default function ActiveWorkoutPill() {
@@ -27,7 +27,8 @@ export default function ActiveWorkoutPill() {
   if (!w || pathname === "/workout" || pathname === "/login") return null;
   const done = w.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0);
   const total = w.exercises.reduce((n, e) => n + e.sets.length, 0);
-  const mins = Math.floor((now - w.startedAt) / 60000);
+  const mins = Math.floor(elapsedMs(w, now) / 60000);
+  const paused = !!w.pausedAt;
   const rest = w.restEndsAt ? Math.ceil((w.restEndsAt - now) / 1000) : 0;
 
   return (
@@ -38,10 +39,13 @@ export default function ActiveWorkoutPill() {
     >
       <span className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-full border border-accent/50 bg-base-900 px-4 text-sm shadow-lg">
         <span className="flex items-center gap-2 text-ink">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+          <span className={`h-2 w-2 rounded-full ${paused ? "bg-fuel" : "animate-pulse bg-accent"}`} />
+          {paused ? "Paused · " : ""}
           {w.title} · {mins} min · {done}/{total}
         </span>
-        <span className="font-semibold text-accent">{rest > 0 ? `Rest ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")}` : "Resume →"}</span>
+        <span className="font-semibold text-accent">
+          {!paused && rest > 0 ? `Rest ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")}` : "Resume →"}
+        </span>
       </span>
     </Link>
   );

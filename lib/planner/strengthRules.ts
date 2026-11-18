@@ -172,7 +172,7 @@ export function applyStrengthRules(input: PlanSession[], ctx: Context): PlanSess
     // "New" only for movements never logged; the form cue goes with it.
     for (const ex of session.exercises) {
       ex.isNew = !ctx.knownNames.has(normalizeExerciseName(ex.name));
-      if (!ex.isNew) ex.cue = null;
+      // Every exercise keeps its how-to (Tom, Nov 2026); familiar lifts get a short one.
     }
   }
   return sessions;

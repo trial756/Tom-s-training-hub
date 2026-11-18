@@ -22,7 +22,9 @@ export interface ActiveExercise {
   /** What the plan asked for: "3 × 6-8 @ 185 lb". */
   target: string | null;
   note: string | null;
+  /** How to do it (from the plan); a new movement's is shown in full. */
   cue: string | null;
+  isNew?: boolean;
   restSec: number;
   /** A hold (plank, wall sit): sets are seconds and get a countdown, not reps. */
   timed?: boolean;
@@ -53,6 +55,10 @@ export interface ActiveWorkout {
   restEndsAt: number | null;
   restTotal: number | null;
   hold?: ActiveHold | null;
+  /** Paused (epoch ms): the clock stops until it's resumed — gym now, the rest at home later. */
+  pausedAt?: number | null;
+  /** Total time spent paused before the current pause, so the logged duration is training time only. */
+  pausedMs?: number;
 }
 
 export const STORAGE_KEY = "tth-active-workout";
@@ -111,7 +117,8 @@ function fromPlanExercise(e: PlanExercise): ActiveExercise {
     name: e.name,
     target: `${e.sets} × ${e.reps}${e.target ? ` @ ${e.target}` : ""}`,
     note: e.note ?? null,
-    cue: e.isNew ? e.cue : null,
+    cue: e.cue ?? null,
+    isNew: !!e.isNew,
     restSec: timed ? 45 : restFor(e.reps, e.name),
     timed,
     sides: sidesFor(e.reps, e.name),
@@ -211,6 +218,23 @@ export function workoutText(w: ActiveWorkout, notes = ""): string {
   return [w.title, ...lines, notes.trim()].filter(Boolean).join("\n");
 }
 
+/** Training time so far: wall time since the start, less every pause. */
+export function elapsedMs(w: ActiveWorkout, now = Date.now()): number {
+  const paused = (w.pausedMs ?? 0) + (w.pausedAt ? now - w.pausedAt : 0);
+  return Math.max(0, now - w.startedAt - paused);
+}
+
 export function elapsedMinutes(w: ActiveWorkout, now = Date.now()): number {
-  return Math.max(1, Math.round((now - w.startedAt) / 60000));
+  return Math.max(1, Math.round(elapsedMs(w, now) / 60000));
+}
+
+/** Pause: the clock stops and any rest or hold timer is dropped. Sets stay as they are. */
+export function pauseWorkout(w: ActiveWorkout, now = Date.now()): ActiveWorkout {
+  if (w.pausedAt) return w;
+  return { ...w, pausedAt: now, restEndsAt: null, restTotal: null, hold: null };
+}
+
+export function resumeWorkout(w: ActiveWorkout, now = Date.now()): ActiveWorkout {
+  if (!w.pausedAt) return w;
+  return { ...w, pausedAt: null, pausedMs: (w.pausedMs ?? 0) + (now - w.pausedAt) };
 }

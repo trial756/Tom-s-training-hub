@@ -11,6 +11,7 @@ import { liftTrends } from "@/lib/planner/progression";
 import { applyStrengthRules } from "@/lib/planner/strengthRules";
 import { doneThisWeek, fillGaps, varyCore } from "@/lib/planner/gaps";
 import { applyRaceWeekRules, applyRecoveryRules, fixedSessionsFor, keepForOpenDays } from "@/lib/planner/raceDays";
+import { withCues } from "@/lib/exerciseCues";
 import { applyAthletics, easeLegLoads, fitVolume, programFor } from "@/lib/planner/program";
 import { isHard, validateWeek } from "@/lib/planner/validate";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
@@ -257,7 +258,8 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         hold: program?.hold,
         alreadyThisWeek: [...kept, ...done.filter((s) => s.id.startsWith("logged-"))],
       });
-      const ruled = program ? easeLegLoads(loaded, program.legLoadFactor) : loaded;
+      // Every exercise carries a how-to: the model's, else one from lib/exerciseCues.
+      const ruled = (program ? easeLegLoads(loaded, program.legLoadFactor) : loaded).map((s) => ({ ...s, exercises: withCues(s.exercises) }));
       const sessions = [
         ...kept,
         ...fixed,

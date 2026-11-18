@@ -50,6 +50,7 @@ export default function FuelPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Meal | null>(null);
+  const [editingLast, setEditingLast] = useState(false);
   const [savedOffline, setSavedOffline] = useState<string | null>(null);
   const [learnedNote, setLearnedNote] = useState<string | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -160,6 +161,7 @@ export default function FuelPage() {
       }
       if (!result.ok) throw new Error(result.error);
       setLastSaved(result.data.meal);
+      setEditingLast(false);
       notifyDataChanged("meal");
       setText("");
       setPhoto(null);
@@ -356,6 +358,25 @@ export default function FuelPage() {
               </div>
             </div>
             <CoachingNote feedback={lastSaved.coaching_feedback} />
+            {editingLast ? (
+              <MealEditor
+                meal={lastSaved}
+                onCancel={() => setEditingLast(false)}
+                onSaved={(m, learned) => {
+                  setEditingLast(false);
+                  setLastSaved(m);
+                  mealUpdated(m, learned);
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditingLast(true)}
+                className="btn-secondary mt-3 min-h-[44px] w-full text-sm"
+              >
+                ✎ Fix items or numbers
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -480,7 +501,22 @@ function MealCard({
         <span className="text-xs text-gray-500">{meal.calories ?? "—"} cal</span>
       </button>
 
-      <p className="mt-1 text-sm text-gray-300">{meal.items.map((i) => i.name).join(", ") || meal.raw_text}</p>
+      <div className="mt-1 flex items-start justify-between gap-2">
+        <p className="text-sm text-gray-300">{meal.items.map((i) => i.name).join(", ") || meal.raw_text}</p>
+        {!editing && (
+          <button
+            type="button"
+            aria-label="Edit meal"
+            onClick={() => {
+              if (!expanded) onToggleExpand();
+              setEditing(true);
+            }}
+            className="-mr-2 -mt-2 min-h-[44px] min-w-[44px] shrink-0 text-sm font-medium text-accent"
+          >
+            Edit
+          </button>
+        )}
+      </div>
 
       {expanded && editing && (
         <MealEditor
@@ -515,9 +551,6 @@ function MealCard({
               className={`text-xs font-medium ${starred ? "text-fuel" : "text-gray-400 active:text-fuel"}`}
             >
               {starred ? "★ Starred" : "☆ Star"}
-            </button>
-            <button onClick={() => setEditing(true)} className="min-h-[44px] px-2 text-xs font-medium text-accent">
-              Edit
             </button>
             <button onClick={onDelete} className="text-xs text-gray-600 active:text-danger">
               Delete
