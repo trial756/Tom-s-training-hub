@@ -17,10 +17,15 @@ import {
   loadActiveWorkout,
   newExercise,
   saveActiveWorkout,
+  setCounts,
   workoutText,
   type ActiveSet,
   type ActiveWorkout,
 } from "@/lib/workoutSession";
+import { backupWorkout, clearBackup, fetchBackup, pickWorkout } from "@/lib/workoutSync";
+import { blockLabel } from "@/lib/planner/blocks";
+
+const BACKUP_EVERY_MS = 30_000;
 
 /** Time to change sides between the two halves of a two-sided hold. */
 const SWITCH_MS = 5000;
@@ -50,17 +55,63 @@ export default function WorkoutPage() {
   const [logged, setLogged] = useState<Logged | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const audio = useRef<AudioContext | null>(null);
+  // When the server last had a copy, and the change it had (updatedAt).
+  const [backedUpAt, setBackedUpAt] = useState<number | null>(null);
+  const backedVersion = useRef<number>(0);
+  const [offline, setOffline] = useState(false);
 
-  // Resume the workout on the phone, or start an empty one.
+  // Resume the workout on the phone — or the server's copy if the phone lost
+  // it or another device moved it on — else start an empty one.
   useEffect(() => {
-    setW(loadActiveWorkout() ?? emptyWorkout(localDateKey(new Date())));
+    const local = loadActiveWorkout();
+    setW(local ?? emptyWorkout(localDateKey(new Date())));
+    fetchBackup().then((server) => {
+      const pick = pickWorkout(local, server);
+      if (pick && pick !== local) {
+        saveActiveWorkout(pick, { keepTime: true });
+        setW(pick);
+      }
+      if (server && pick?.startedAt === server.startedAt && (pick.updatedAt ?? 0) <= (server.updatedAt ?? 0)) {
+        backedVersion.current = server.updatedAt ?? 0;
+        setBackedUpAt(server.updatedAt ?? Date.now());
+      }
+    });
   }, []);
+
+  // The backup: every 30 s when something changed, and at once when the app
+  // goes to the background. Pause backs up straight away (see pause()).
+  const latest = useRef<ActiveWorkout | null>(null);
+  latest.current = w;
+  const backup = useCallback(async (keepalive = false) => {
+    const cur = latest.current;
+    if (!cur || !cur.exercises.length || (cur.updatedAt ?? 0) <= backedVersion.current) return;
+    const at = await backupWorkout(cur, { keepalive });
+    if (at) {
+      backedVersion.current = cur.updatedAt ?? at;
+      setBackedUpAt(at);
+      setOffline(false);
+    } else setOffline(true);
+  }, []);
+  useEffect(() => {
+    const t = setInterval(() => void backup(), BACKUP_EVERY_MS);
+    const hidden = () => {
+      if (document.visibilityState === "hidden") void backup(true);
+    };
+    document.addEventListener("visibilitychange", hidden);
+    window.addEventListener("pagehide", hidden);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", hidden);
+      window.removeEventListener("pagehide", hidden);
+    };
+  }, [backup]);
 
   const update = useCallback((fn: (w: ActiveWorkout) => ActiveWorkout) => {
     setW((cur) => {
       if (!cur) return cur;
-      const next = fn(cur);
-      saveActiveWorkout(next);
+      const next = { ...fn(cur), updatedAt: Date.now() };
+      saveActiveWorkout(next, { keepTime: true });
+      latest.current = next;
       return next;
     });
   }, []);
@@ -147,7 +198,8 @@ export default function WorkoutPage() {
       const ex = x.exercises.find((e) => e.id === hold.exId);
       const totalSets = x.exercises.reduce((n, e) => n + e.sets.length, 0);
       const doneSets = x.exercises.reduce((n, e) => n + e.sets.filter((st) => st.done).length, 0);
-      const last = doneSets + 1 >= totalSets;
+      // A stretch or warm-up hold never starts a rest.
+      const last = doneSets + 1 >= totalSets || (ex?.block ?? "main") !== "main";
       return {
         ...x,
         hold: null,
@@ -161,9 +213,16 @@ export default function WorkoutPage() {
 
   if (!w) return null;
 
-  const total = w.exercises.reduce((n, e) => n + e.sets.length, 0);
-  const done = w.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0);
+  const { total, done, anyDone } = setCounts(w);
   const paused = !!w.pausedAt;
+  const runDay = !!w.runDay;
+  const hasStrides = w.exercises.some((x) => x.block === "after" && /strides?\b/i.test(x.name));
+
+  function pause() {
+    update((x) => pauseWorkout(x));
+    // Straight to the server too, so nothing rides on the phone alone while paused.
+    setTimeout(() => void backup(), 0);
+  }
 
   function setField(exId: string, i: number, field: "weight" | "reps", value: string) {
     update((x) => ({
@@ -214,11 +273,12 @@ export default function WorkoutPage() {
       const ex = x.exercises.find((e) => e.id === exId)!;
       const wasDone = ex.sets[i].done;
       const isLastSetOverall = !wasDone && done + 1 === total;
+      const checklist = (ex.block ?? "main") !== "main";
       return {
         ...x,
         exercises: x.exercises.map((e) => (e.id === exId ? { ...e, sets: e.sets.map((s, j) => (j === i ? { ...s, done: !s.done } : s)) } : e)),
-        // Ticking a set starts the rest; unticking leaves any rest alone.
-        ...(wasDone || isLastSetOverall ? {} : { restEndsAt: Date.now() + ex.restSec * 1000, restTotal: ex.restSec }),
+        // Ticking a set starts the rest; unticking, or ticking off a stretch, leaves it alone.
+        ...(wasDone || isLastSetOverall || checklist ? {} : { restEndsAt: Date.now() + ex.restSec * 1000, restTotal: ex.restSec }),
       };
     });
   }
@@ -256,7 +316,7 @@ export default function WorkoutPage() {
     if (!w) return;
     const exercises = completedExercises(w);
     if (!exercises.length) {
-      setError("Tick at least one set first.");
+      setError("Tick at least one set or stretch first.");
       return;
     }
     setSaving(true);
@@ -269,6 +329,7 @@ export default function WorkoutPage() {
       );
       if (!result.queued && !result.ok) throw new Error(result.error);
       saveActiveWorkout(null);
+      void clearBackup(w.startedAt);
       if (result.queued) {
         setLogged({ summary: `${w.title} — saved on this phone`, coaching_feedback: "No signal right now. It syncs by itself when you're back online, and the coaching arrives then.", vs_last_time: null });
         return;
@@ -313,10 +374,22 @@ export default function WorkoutPage() {
             {clock(elapsedMs(w, now) / 1000)}
             {paused ? " · paused" : ""} · {done}/{total} sets
           </p>
+          {w.exercises.length > 0 && (
+            <p className={`text-xs ${offline ? "text-fuel" : "text-accent"}`}>
+              Saved ✓
+              <span className="text-faint">
+                {offline
+                  ? " on this phone · backup waits for signal"
+                  : backedUpAt
+                    ? ` · backed up ${new Date(backedUpAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+                    : " on this phone"}
+              </span>
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-start gap-1">
           {!paused && (
-            <button type="button" className="min-h-[44px] rounded-xl border border-base-600 px-3 text-sm text-muted" onClick={() => update((x) => pauseWorkout(x))}>
+            <button type="button" className="min-h-[44px] rounded-xl border border-base-600 px-3 text-sm text-muted" onClick={pause}>
               Pause
             </button>
           )}
@@ -331,9 +404,9 @@ export default function WorkoutPage() {
           <div>
             <p className="text-base font-semibold text-ink">Paused</p>
             <p className="text-sm text-muted">
-              {done}/{total} sets done. Everything is saved on this phone and the clock is stopped, so carry on
-              later — at home, after work, whenever. Tap Resume (or tick a set) to pick it back up, then Finish &amp; log
-              once at the end.
+              {done}/{total} sets done. Everything is saved — on this phone and backed up — and the clock is stopped.
+              Switch screens, close the app, carry on at home later. Tap Resume (or tick a set) to pick it back up, then
+              Finish &amp; log once at the end.
             </p>
           </div>
           <button type="button" className="btn-primary min-h-[48px] w-full" onClick={() => update((x) => resumeWorkout(x))}>
@@ -343,10 +416,60 @@ export default function WorkoutPage() {
       )}
 
       <div className="space-y-3">
-        {w.exercises.map((e) => {
+        {w.exercises.map((e, idx) => {
           const exDone = e.sets.length > 0 && e.sets.every((s) => s.done);
+          const block = e.block ?? "main";
+          const prevBlock = idx > 0 ? (w.exercises[idx - 1].block ?? "main") : null;
+          const heading =
+            block !== prevBlock && w.exercises.some((x) => (x.block ?? "main") !== "main") ? (
+              <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                {blockLabel(block, runDay, block === "after" && hasStrides)}
+              </p>
+            ) : null;
+          if (block !== "main") {
+            const s = e.sets[0];
+            return (
+              <div key={e.id} className="space-y-3">
+                {heading}
+                <div className={`flex items-start gap-3 rounded-xl border bg-base-900 p-3 ${s?.done ? "border-accent/40" : "border-base-700"}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-ink">
+                      {e.name} <span className="font-normal text-muted">· {e.reps ?? e.target}</span>
+                    </p>
+                    {e.cue && <p className={`mt-0.5 text-xs leading-snug ${e.isNew ? "text-gray-300" : "text-faint"}`}>{e.cue}</p>}
+                  </div>
+                  {e.timed && s && !s.done && (
+                    <button
+                      type="button"
+                      aria-label={`Start ${e.name}`}
+                      disabled={!!hold}
+                      onClick={() => startHold(e.id, 0)}
+                      className="flex h-11 min-w-[56px] shrink-0 items-center justify-center rounded-xl border border-accent/60 px-2 text-sm font-semibold text-accent disabled:opacity-30"
+                    >
+                      ▶ {s.reps || "30"}s
+                    </button>
+                  )}
+                  {s && (
+                    <button
+                      type="button"
+                      aria-label={s.done ? `Untick ${e.name}` : `Tick ${e.name}`}
+                      aria-pressed={s.done}
+                      onClick={() => toggleSet(e.id, 0)}
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-lg font-bold ${
+                        s.done ? "border-accent bg-accent text-base-950" : "border-base-600 bg-base-800 text-faint"
+                      }`}
+                    >
+                      ✓
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          }
           return (
-            <div key={e.id} className={`card ${exDone ? "border-accent/40" : ""}`}>
+            <div key={e.id} className="space-y-3">
+            {heading}
+            <div className={`card ${exDone ? "border-accent/40" : ""}`}>
               <div className="mb-2">
                 <p className="text-base font-semibold text-ink">{e.name}</p>
                 {e.target && <p className="text-xs text-muted">Plan: {e.target}</p>}
@@ -442,6 +565,7 @@ export default function WorkoutPage() {
                 </button>
               </div>
             </div>
+            </div>
           );
         })}
 
@@ -464,8 +588,8 @@ export default function WorkoutPage() {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
-        <button type="button" className="btn-primary min-h-[48px] w-full" disabled={saving || done === 0} onClick={finish}>
-          {saving ? "Logging…" : `Finish & log ${done} set${done === 1 ? "" : "s"}`}
+        <button type="button" className="btn-primary min-h-[48px] w-full" disabled={saving || !anyDone} onClick={finish}>
+          {saving ? "Logging…" : done > 0 ? `Finish & log ${done} set${done === 1 ? "" : "s"}` : "Finish & log"}
         </button>
         {error && <p className="text-sm text-danger">{error}</p>}
         <button type="button" className="min-h-[44px] w-full text-sm text-faint" onClick={() => setDiscarding(true)} disabled={saving}>
@@ -535,6 +659,7 @@ export default function WorkoutPage() {
           label="Workout discarded"
           onUndo={() => setDiscarding(false)}
           onExpire={() => {
+            if (w) void clearBackup(w.startedAt);
             saveActiveWorkout(null);
             router.push("/");
           }}

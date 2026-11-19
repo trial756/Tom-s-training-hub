@@ -1,3 +1,4 @@
+import { blockOf, hasRun, type Block } from "@/lib/planner/blocks";
 import type { PlanExercise, PlanSession } from "@/lib/planner/types";
 import type { Exercise } from "@/lib/types";
 
@@ -30,6 +31,10 @@ export interface ActiveExercise {
   timed?: boolean;
   /** Done on each side (side plank, Copenhagen): the countdown runs twice with a switch between. */
   sides?: 1 | 2;
+  /** Warm-up and stretches are a checklist (one tick, no rest), apart from the workout's sets. */
+  block?: Block;
+  /** What the plan asked for, as written ("15 per side", "60s per side") — shown on checklist items. */
+  reps?: string;
   sets: ActiveSet[];
 }
 
@@ -59,6 +64,10 @@ export interface ActiveWorkout {
   pausedAt?: number | null;
   /** Total time spent paused before the current pause, so the logged duration is training time only. */
   pausedMs?: number;
+  /** Started from a session with a run, so warm-up and stretch read "before / after you run". */
+  runDay?: boolean;
+  /** Last change (epoch ms) — which copy wins when the phone's and the server's differ. */
+  updatedAt?: number;
 }
 
 export const STORAGE_KEY = "tth-active-workout";
@@ -107,11 +116,13 @@ export function holdSeconds(reps: string): string {
   return String(/min/i.test(reps) ? n * 60 : n);
 }
 
-function fromPlanExercise(e: PlanExercise): ActiveExercise {
+function fromPlanExercise(e: PlanExercise, runDay: boolean): ActiveExercise {
   const timed = isTimed(e.reps, e.name);
   const weight = firstNumber(e.target);
   const reps = timed ? holdSeconds(e.reps) : firstNumber(e.reps);
-  const count = Math.max(1, Math.min(10, Number(e.sets) || 3));
+  const block = blockOf(e, runDay);
+  // A warm-up drill or stretch is ticked once, however many rounds it asks for.
+  const count = block === "main" ? Math.max(1, Math.min(10, Number(e.sets) || 3)) : 1;
   return {
     id: uid(),
     name: e.name,
@@ -122,7 +133,21 @@ function fromPlanExercise(e: PlanExercise): ActiveExercise {
     restSec: timed ? 45 : restFor(e.reps, e.name),
     timed,
     sides: sidesFor(e.reps, e.name),
+    block,
+    reps: e.reps,
     sets: Array.from({ length: count }, () => ({ weight, reps, done: false })),
+  };
+}
+
+const BLOCK_ORDER: Record<Block, number> = { warmup: 0, main: 1, after: 2 };
+
+/** Sets in the workout proper — warm-up and stretches don't count. */
+export function setCounts(w: ActiveWorkout): { done: number; total: number; anyDone: boolean } {
+  const main = w.exercises.filter((e) => (e.block ?? "main") === "main");
+  return {
+    total: main.reduce((n, e) => n + e.sets.length, 0),
+    done: main.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0),
+    anyDone: w.exercises.some((e) => e.sets.some((s) => s.done)),
   };
 }
 
@@ -131,8 +156,11 @@ export function workoutFromSession(session: PlanSession, date: string, liftTitle
     version: 1,
     date,
     title: liftTitle,
+    runDay: hasRun(session),
     startedAt: Date.now(),
-    exercises: session.exercises.map(fromPlanExercise),
+    exercises: session.exercises
+      .map((e) => fromPlanExercise(e, hasRun(session)))
+      .sort((a, b) => BLOCK_ORDER[a.block ?? "main"] - BLOCK_ORDER[b.block ?? "main"]),
     restEndsAt: null,
     restTotal: null,
   };
@@ -168,9 +196,9 @@ export function loadActiveWorkout(): ActiveWorkout | null {
   }
 }
 
-export function saveActiveWorkout(w: ActiveWorkout | null) {
+export function saveActiveWorkout(w: ActiveWorkout | null, opts: { keepTime?: boolean } = {}) {
   try {
-    if (w) localStorage.setItem(STORAGE_KEY, JSON.stringify(w));
+    if (w) localStorage.setItem(STORAGE_KEY, JSON.stringify(opts.keepTime ? w : { ...w, updatedAt: Date.now() }));
     else localStorage.removeItem(STORAGE_KEY);
     window.dispatchEvent(new Event("tth-active-workout"));
   } catch {
@@ -184,7 +212,7 @@ const num = (s: string) => {
 };
 
 /** The ticked sets, as the workout log stores them. Exercises with nothing ticked are left out. */
-export function completedExercises(w: ActiveWorkout): (Exercise & { timed: boolean; sides: 1 | 2 })[] {
+export function completedExercises(w: ActiveWorkout): (Exercise & { timed: boolean; sides: 1 | 2; block: Block })[] {
   return w.exercises
     .map((e) => ({
       name: e.name,
@@ -197,13 +225,17 @@ export function completedExercises(w: ActiveWorkout): (Exercise & { timed: boole
         }),
       timed: !!e.timed,
       sides: e.sides ?? 1,
+      block: e.block ?? "main",
     }))
     .filter((e) => e.name && e.sets.length > 0);
 }
 
 /** "Back Squat: 185x5, 185x5, 185x4" per line — what the parser and History show as the raw log. */
 export function workoutText(w: ActiveWorkout, notes = ""): string {
-  const lines = completedExercises(w).map((e) => {
+  const done = completedExercises(w);
+  // Warm-up and stretches go on one line of their own, apart from the lifting.
+  const mobility = done.filter((e) => e.block !== "main").map((e) => e.name);
+  const lines = done.filter((e) => e.block === "main").map((e) => {
     const sets = e.sets
       .map((s) =>
         e.timed
@@ -215,7 +247,7 @@ export function workoutText(w: ActiveWorkout, notes = ""): string {
       .join(", ");
     return `${e.name}${e.timed && e.sides === 2 ? " (each side)" : ""}: ${sets}`;
   });
-  return [w.title, ...lines, notes.trim()].filter(Boolean).join("\n");
+  return [w.title, ...lines, mobility.length ? `Warm-up & stretch: ${mobility.join(", ")}` : "", notes.trim()].filter(Boolean).join("\n");
 }
 
 /** Training time so far: wall time since the start, less every pause. */

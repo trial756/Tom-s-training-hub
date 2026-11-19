@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loadActiveWorkout, saveActiveWorkout, workoutFromSession } from "@/lib/workoutSession";
 import { MUSCLE_LABELS, type MuscleRegion } from "@/lib/muscles";
+import { groupExercises, hasRun } from "@/lib/planner/blocks";
 import type { PlanDay, PlanSession, WeekPlan } from "@/lib/planner/types";
 import {
   formatPaceRange,
@@ -253,10 +254,15 @@ export default function TodayPlan({
           </div>
         )}
 
-        {session && session.exercises.length > 0 && (
+        {session && session.exercises.length > 0 &&
+          groupExercises(session.exercises, hasRun(session)).map((group, gi, groups) => (
+          <div key={group.block} className={gi > 0 ? "mt-3" : ""}>
+          {groups.length > 1 && (
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">{group.label}</p>
+          )}
           <ul className="space-y-2">
-            {session.exercises.map((ex, i) => (
-              <li key={i} className="rounded-lg bg-base-800 p-2.5">
+            {group.items.map(({ ex, index: i }) => (
+              <li key={i} className={`rounded-lg p-2.5 ${group.block === "main" ? "bg-base-800" : "border border-base-700 bg-transparent"}`}>
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-sm font-medium text-ink">
                     {ex.name}
@@ -277,7 +283,8 @@ export default function TodayPlan({
               </li>
             ))}
           </ul>
-        )}
+          </div>
+          ))}
 
         {canLog && isToday && session.exercises.length > 0 && (!selected?.loggedLift || hasActiveWorkout()) && (
           <StartWorkoutButton session={session} date={selected.date} />
