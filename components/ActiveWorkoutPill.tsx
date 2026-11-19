@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { elapsedMs, loadActiveWorkout, type ActiveWorkout } from "@/lib/workoutSession";
+import { restoreIfMissing } from "@/lib/workoutSync";
 
 /** A way back into a workout in progress from anywhere in the app. */
 export default function ActiveWorkoutPill() {
@@ -14,6 +15,8 @@ export default function ActiveWorkoutPill() {
   useEffect(() => {
     const read = () => setW(loadActiveWorkout());
     read();
+    // A workout the phone lost (cleared storage, another device) comes back from the server backup.
+    if (pathname !== "/login") void restoreIfMissing();
     window.addEventListener("tth-active-workout", read);
     window.addEventListener("storage", read);
     const t = setInterval(() => setNow(Date.now()), 1000);
