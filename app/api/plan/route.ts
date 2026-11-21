@@ -6,7 +6,7 @@ import { cleanRegions } from "@/lib/muscles";
 import { buildExerciseLookup } from "@/lib/muscleCoverage";
 import { buildPlannerContext } from "@/lib/planner/context";
 import { scheduleWeek, type DayLog } from "@/lib/planner/schedule";
-import { fitWeekToTargets, reconcileMileage } from "@/lib/planner/mileage";
+import { fitWeekToTargets, reconcileMileage, repairRuns } from "@/lib/planner/mileage";
 import { liftTrends } from "@/lib/planner/progression";
 import { applyStrengthRules } from "@/lib/planner/strengthRules";
 import { doneThisWeek, fillGaps, varyCore } from "@/lib/planner/gaps";
@@ -218,7 +218,7 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
       // Fresh ids that can't collide with the sessions being kept.
       const tag = Date.now().toString(36);
       let fresh = toSessions(generated.sessions ?? []).map((s) => (kept.length ? { ...s, id: `${s.id}-${tag}` } : s));
-      fresh = keepForOpenDays(fresh, openDays);
+      fresh = keepForOpenDays(repairRuns(fresh, Math.round(context.typicalRunMiles) || 3), openDays);
       if (raceWeek) fresh = applyRaceWeekRules(fresh);
       const fixedEasyMiles = fixed.reduce((sum, s) => sum + (s.run?.type === "Race" ? 0 : s.miles ?? 0), 0);
       const fitted = fitWeekToTargets(fresh, {

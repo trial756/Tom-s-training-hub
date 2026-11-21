@@ -163,3 +163,27 @@ test("Nov 12 2026 bug: a run + legs day with only the legs logged isn't repeated
   assert.equal(week.Fri, "Shoulders & arms (pre-long-run)");
   assert.equal(week.Sat, "Long 16");
 });
+
+// Nov 21 2026: next week's Sunday run was trimmed to 3.9 mi but still read
+// "5 mi easy + strides", and Thursday's "Easy run + shoulder press" had no
+// distance or type, so no run showed.
+test("Nov 21 2026 bug: a trimmed run's breakdown says the new distance; a run with no distance is repaired", async () => {
+  const { fitWeekToTargets, repairRuns } = await import("@/lib/planner/mileage");
+  const week = [
+    session("e", "lift_and_run", "Easy run + Pull", { runType: "Easy", miles: 5, run: { type: "Easy", structure: "5 mi easy + 6 × 20s strides" } }),
+    session("l", "run", "Long run — 14 mi", { runType: "Long", miles: 14 }),
+    session("m", "run", "MP 7mi", { runType: "Marathon Pace", miles: 7, taxesLegs: true, run: { type: "Marathon Pace", structure: "1.5 mi easy · 4 × 1 mi @ MP · 1.5 mi easy" } }),
+  ];
+  const out = fitWeekToTargets(week, { weeklyTarget: 20, longRunMiles: 14, milesAlreadyRun: 0 }).sessions;
+  const easy = out.find((s) => s.id === "e")!;
+  assert.ok(easy.miles! < 5);
+  assert.equal(easy.run?.structure, `${easy.miles} mi easy + 6 × 20s strides`);
+  assert.equal(out.find((s) => s.id === "m")!.run?.structure, "1.5 mi easy · 4 × 1 mi @ MP · 1.5 mi easy", "a quality breakdown is untouched");
+
+  const repaired = repairRuns([
+    session("t", "lift_and_run", "Easy run + Barbell Shoulder Press", { run: { type: null, structure: null }, miles: null }),
+    session("r", "run", "Easy run + mobility", { run: { type: null, structure: null }, miles: null }),
+  ]);
+  assert.deepEqual([repaired[0].kind, repaired[0].title, repaired[0].run], ["lift", "Barbell Shoulder Press", null]);
+  assert.deepEqual([repaired[1].miles, repaired[1].run?.type], [3, "Easy"]);
+});

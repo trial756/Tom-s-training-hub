@@ -170,10 +170,39 @@ const MIN_EASY_RUN_MILES = 2;
 const isLongRun = (s: PlanSession) =>
   isRun(s) && (s.run?.type === "Long" || (!s.run?.type && /\blong\b/i.test(s.title)));
 
-/** Rewrites the first distance in a title to match the planned miles ("Long run — 18mi…" planned at 16 → "16mi"). */
+/**
+ * Rewrites the first distance in a title to match the planned miles ("Long
+ * run — 18mi…" planned at 16 → "16mi"), and a one-distance breakdown too:
+ * Nov 2026, a run trimmed to 3.9 mi still read "5 mi easy + 6 × 20s strides".
+ * A breakdown with several distances (warm-up · reps · cool-down) is a
+ * quality session, which is never trimmed, so it's left alone.
+ */
 function syncTitleMiles(s: PlanSession) {
   if (!s.miles) return;
-  s.title = s.title.replace(/(\d+(?:\.\d+)?)(\s?mi\b)/i, (match, n, unit) => (Number(n) === s.miles ? match : `${s.miles}${unit}`));
+  const miles = s.miles;
+  const swap = (text: string) => text.replace(/(\d+(?:\.\d+)?)(\s?mi\b)/i, (match, n, unit) => (Number(n) === miles ? match : `${miles}${unit}`));
+  s.title = swap(s.title);
+  const structure = s.run?.structure;
+  if (structure && (structure.match(/\d+(?:\.\d+)?\s?mi\b/gi) ?? []).length === 1) s.run = { ...s.run!, structure: swap(structure) };
+}
+
+/**
+ * A run with no distance or no type (Nov 2026: "Easy run + Barbell Shoulder
+ * Press" came back with neither, so the card showed no run at all). A run +
+ * lift with no miles becomes the lift; a run with no miles gets a short easy
+ * run; a run with miles but no type is an easy run.
+ */
+export function repairRuns(input: PlanSession[], easyMiles = 3): PlanSession[] {
+  return input.map((s) => {
+    if (s.kind !== "run" && s.kind !== "lift_and_run") return s;
+    if (!s.miles && s.kind === "lift_and_run") {
+      const lift = s.title.includes("+") ? s.title.split("+").slice(1).join("+").trim() : s.title;
+      return { ...s, kind: "lift", miles: null, run: null, title: lift };
+    }
+    const miles = s.miles || easyMiles;
+    const type = s.run?.type ?? (/\blong\b/i.test(s.title) ? "Long" : "Easy");
+    return { ...s, miles, run: { type, structure: s.run?.structure ?? null } };
+  });
 }
 
 /**
