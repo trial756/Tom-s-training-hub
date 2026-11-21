@@ -55,6 +55,70 @@ export interface WeekCheckInput {
   outsideHard?: string[];
   weeklyTarget?: number | null;
   milesDone?: number;
+  /**
+   * Long runs of 16+ mi just before this week (the previous Saturday), logged
+   * or planned — the day after one is a recovery day even across the week line.
+   */
+  longBefore?: { date: string; miles: number }[];
+  /** When chest, back and shoulders were last trained before this week (logged, or still planned). */
+  lastTrained?: Partial<Record<UpperGroup, string>>;
+}
+
+// ── Recovery after a long run, and no muscle left a week ──────────────
+//
+// Nov 21 2026: the week after a 20-miler opened with an easy run + heavy
+// rows on the Sunday and put "the day after the long run" recovery walk on
+// the Monday; and chest went nine days (Wed → the next Friday) while
+// shoulders came on back-to-back days. Two rules, fixed by swapping days
+// like the others: the day after a 16+ mile long run holds a light session
+// (walk/mobility, or an easy run of 4 mi or less, no lifting), and chest,
+// back and shoulders each come back within 7 days of when they were last
+// trained.
+
+export const RECOVERY_AFTER_MILES = 16;
+export const MAX_GAP_DAYS = 7;
+export type UpperGroup = "chest" | "back" | "shoulders";
+const GROUP_OF: Partial<Record<string, UpperGroup>> = {
+  horizontal_press: "chest",
+  fly: "chest",
+  horizontal_pull: "back",
+  vertical_pull: "back",
+  vertical_press: "shoulders",
+  lateral_raise: "shoulders",
+  rear_delt: "shoulders",
+};
+const GROUP_LABEL: Record<UpperGroup, string> = { chest: "Chest", back: "Back", shoulders: "Shoulders" };
+
+/** The upper-body groups a session trains (lifts only). */
+export function upperGroupsOf(s: PlanSession | undefined): UpperGroup[] {
+  if (!s || (s.kind !== "lift" && s.kind !== "lift_and_run")) return [];
+  return groupsOfNames(s.exercises.map((e) => e.name));
+}
+
+/** The upper-body groups a list of exercise names trains. */
+export function groupsOfNames(names: string[]): UpperGroup[] {
+  const out = new Set<UpperGroup>();
+  for (const n of names) {
+    const g = GROUP_OF[patternOf(n)];
+    if (g) out.add(g);
+  }
+  return [...out];
+}
+
+/** Latest date each group was trained, from (date, exercise names) pairs. */
+export function lastTrainedFrom(entries: { date: string; names: string[] }[]): Partial<Record<UpperGroup, string>> {
+  const out: Partial<Record<UpperGroup, string>> = {};
+  for (const e of entries) for (const g of groupsOfNames(e.names)) if (!out[g] || out[g]! < e.date) out[g] = e.date;
+  return out;
+}
+
+/** A recovery-day session: walk and mobility, or a short easy run with no lifting. */
+export function isLight(s: PlanSession | undefined): boolean {
+  if (!s) return true;
+  if (s.kind === "active_recovery" || s.kind === "rest") return true;
+  if (s.kind !== "run" || s.taxesLegs) return false;
+  const run = plannedRunFor(s);
+  return (!run || run.type === "Easy") && (s.miles ?? 0) <= 4;
 }
 
 export interface WeekCheck {
@@ -63,9 +127,25 @@ export interface WeekCheck {
   warnings: string[];
 }
 
-type Violation = { kind: "adjacent"; a: string; b: string } | { kind: "legs_before_long"; legDay: string; longDay: string };
+type Violation =
+  | { kind: "adjacent"; a: string; b: string }
+  | { kind: "legs_before_long"; legDay: string; longDay: string }
+  | { kind: "after_long"; day: string; miles: number }
+  | { kind: "stale"; group: UpperGroup; day: string; deadline: string; last: string };
 
-function findViolations(days: PlanDay[], byId: Map<string, PlanSession>, outsideHard: string[], today: string): Violation[] {
+const addDays = (key: string, n: number) => {
+  const d = new Date(`${key}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+};
+
+function findViolations(
+  days: PlanDay[],
+  byId: Map<string, PlanSession>,
+  outsideHard: string[],
+  today: string,
+  extra: { longBefore?: { date: string; miles: number }[]; lastTrained?: Partial<Record<UpperGroup, string>> } = {}
+): Violation[] {
   const at = new Map(days.map((d) => [d.date, d.sessionId ? byId.get(d.sessionId) : undefined]));
   const hardDates = [...days.filter((d) => isHard(at.get(d.date))).map((d) => d.date), ...outsideHard].sort();
   const out: Violation[] = [];
@@ -81,6 +161,27 @@ function findViolations(days: PlanDay[], byId: Map<string, PlanSession>, outside
     if (before && before.date >= today && hasLegWork(at.get(before.date)) && !isHard(at.get(before.date))) {
       out.push({ kind: "legs_before_long", legDay: before.date, longDay: d.date });
     }
+  }
+  // The day after a 16+ mile long run (this week's, or the previous Saturday's) is light.
+  const longs = [
+    ...(extra.longBefore ?? []),
+    ...days.filter((d) => isLong(at.get(d.date))).map((d) => ({ date: d.date, miles: at.get(d.date)?.miles ?? 0 })),
+  ].filter((l) => l.miles >= RECOVERY_AFTER_MILES);
+  for (const l of longs) {
+    const next = days.find((d) => daysBetweenKeys(l.date, d.date) === 1);
+    if (next && next.date >= today && !isLight(at.get(next.date))) out.push({ kind: "after_long", day: next.date, miles: l.miles });
+  }
+  // Chest, back and shoulders back within a week: the first session that
+  // trains a group mustn't land after its deadline when the deadline is inside the week.
+  // (When each was last trained comes from the logs, not from what past days had planned.)
+  const lastTrained = extra.lastTrained ?? {};
+  const earliest = days.find((d) => d.date >= today)?.date;
+  for (const [g, last] of Object.entries(lastTrained) as [UpperGroup, string][]) {
+    if (!earliest) break;
+    // Already overdue: as soon as possible.
+    const deadline = addDays(last, MAX_GAP_DAYS) < earliest ? earliest : addDays(last, MAX_GAP_DAYS);
+    const first = days.find((d) => d.date >= today && upperGroupsOf(at.get(d.date)).includes(g));
+    if (first && first.date > deadline) out.push({ kind: "stale", group: g, day: first.date, deadline, last });
   }
   return out;
 }
@@ -109,7 +210,8 @@ export function validateWeek(input: WeekCheckInput): WeekCheck {
 
   const movable = (d: PlanDay) =>
     d.date > input.today && d.status === "upcoming" && !!d.sessionId && !byId.get(d.sessionId)?.frozen && !byId.get(d.sessionId)?.fixedDate;
-  const count = () => findViolations(days, byId, outsideHard, input.today).length;
+  const extra = { longBefore: input.longBefore, lastTrained: input.lastTrained };
+  const count = () => findViolations(days, byId, outsideHard, input.today, extra).length;
 
   const swap = (x: PlanDay, y: PlanDay) => {
     const t = x.sessionId;
@@ -124,7 +226,7 @@ export function validateWeek(input: WeekCheckInput): WeekCheck {
   // Fix by swapping days still to come; each swap must strictly reduce the
   // number of broken rules, so this always ends.
   for (let guard = 0; guard < 10; guard++) {
-    const violations = findViolations(days, byId, outsideHard, input.today);
+    const violations = findViolations(days, byId, outsideHard, input.today, extra);
     if (!violations.length) break;
     const v = violations[0];
     // Which day's session to move: the later hard day (not the long run if
@@ -133,7 +235,9 @@ export function validateWeek(input: WeekCheckInput): WeekCheck {
       v.kind === "adjacent"
         ? [v.b, v.a].map((date) => days.find((d) => d.date === date)).filter((d): d is PlanDay => !!d && movable(d))
             .sort((p, q) => Number(isLong(byId.get(p.sessionId!))) - Number(isLong(byId.get(q.sessionId!))))
-        : [days.find((d) => d.date === v.legDay)].filter((d): d is PlanDay => !!d && movable(d));
+        : v.kind === "legs_before_long"
+          ? [days.find((d) => d.date === v.legDay)].filter((d): d is PlanDay => !!d && movable(d))
+          : [days.find((d) => d.date === v.day)].filter((d): d is PlanDay => !!d && movable(d));
     let best: { from: PlanDay; to: PlanDay; score: number } | null = null;
     const before = violations.length;
     for (const from of candidates) {
@@ -151,17 +255,25 @@ export function validateWeek(input: WeekCheckInput): WeekCheck {
     best.to.adjustNote =
       v.kind === "adjacent"
         ? `Moved to ${SHORT_DAY[dow(best.to.date)]} so it doesn't sit next to another hard day.`
-        : `Moved to ${SHORT_DAY[dow(best.to.date)]} to keep leg work off the day before the long run.`;
+        : v.kind === "legs_before_long"
+          ? `Moved to ${SHORT_DAY[dow(best.to.date)]} to keep leg work off the day before the long run.`
+          : v.kind === "after_long"
+            ? `Moved to ${SHORT_DAY[dow(best.to.date)]} so the day after the ${v.miles}-mile long run stays easy.`
+            : `Moved to ${SHORT_DAY[dow(best.to.date)]} so ${GROUP_LABEL[v.group].toLowerCase()} isn't left more than a week.`;
     if (best.from.sessionId) best.from.adjustNote = `Swapped here to make room for ${moved.title}.`;
   }
 
-  for (const v of findViolations(days, byId, outsideHard, input.today)) {
-    const day = days.find((d) => d.date === (v.kind === "adjacent" ? v.b : v.legDay));
+  for (const v of findViolations(days, byId, outsideHard, input.today, extra)) {
+    const day = days.find((d) => d.date === (v.kind === "adjacent" ? v.b : v.kind === "legs_before_long" ? v.legDay : v.day));
     if (!day) continue;
     day.warning =
       v.kind === "adjacent"
         ? "Two hard days in a row and no open day to move one to — take this one easier, or swap it yourself."
-        : "Leg work the day before the long run — keep it light, or skip the leg exercises.";
+        : v.kind === "legs_before_long"
+          ? "Leg work the day before the long run — keep it light, or skip the leg exercises."
+          : v.kind === "after_long"
+            ? `Day after the ${v.miles}-mile long run — keep it to a walk, mobility or a short easy jog.`
+            : `${GROUP_LABEL[v.group]} was last trained ${v.last.slice(5)}, more than a week before this.`;
   }
 
   // Each day placed against the long run, from where things actually landed.

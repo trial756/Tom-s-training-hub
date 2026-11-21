@@ -13,7 +13,7 @@ import { doneThisWeek, fillGaps, varyCore } from "@/lib/planner/gaps";
 import { applyRaceWeekRules, applyRecoveryRules, fixedSessionsFor, keepForOpenDays } from "@/lib/planner/raceDays";
 import { withCues } from "@/lib/exerciseCues";
 import { applyAthletics, easeLegLoads, fitVolume, programFor } from "@/lib/planner/program";
-import { isHard, validateWeek } from "@/lib/planner/validate";
+import { isHard, isLong as isLongSession, lastTrainedFrom, RECOVERY_AFTER_MILES, validateWeek } from "@/lib/planner/validate";
 import type { PlanDay, PlanSession, PlanWeekMeta, WeekPlan } from "@/lib/planner/types";
 import { loadGoals } from "@/lib/goalsStore";
 import { loadPaceZones } from "@/lib/paceZonesStore";
@@ -359,10 +359,21 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
 
     // The week's last check: hard days apart, no legs before the long run,
     // mileage in range, words that match where things landed.
+    // What the logs say: when chest, back and shoulders were last trained, and
+    // any 16+ mile run on a given day (for the day-after-the-long-run rule).
+    const loggedLifts = workouts
+      .map((w) => ({ date: localDateKey(new Date(w.logged_at)), names: ((w.exercises ?? []) as { name?: string }[]).map((e) => e?.name ?? "") }))
+      .filter((w) => w.date <= todayKey);
+    const longLoggedOn = (date: string) =>
+      runs
+        .filter((r) => localDateKey(new Date(r.logged_at)) === date && Number(r.distance_miles) >= RECOVERY_AFTER_MILES)
+        .map((r) => ({ date, miles: Math.round(Number(r.distance_miles)) }));
     const checked = validateWeek({
       days: reconciled.days,
       sessions: reconciled.sessions,
       today: todayKey,
+      longBefore: longLoggedOn(localDateKey(shiftDays(keyToDate(weekStart), -1))),
+      lastTrained: lastTrainedFrom(loggedLifts),
       weeklyTarget: weeklyTargetOf(context),
       milesDone: context.milesThisWeek,
     });
@@ -468,9 +479,22 @@ async function handle(opts: { regenerate: string | null; ensure: string | null }
         avgWeeklyMiles: futureContext.avgWeeklyMiles,
         typicalRunMiles: futureContext.typicalRunMiles,
       });
+      // Before this week: what's logged, plus what the current week still has planned.
+      const eve = localDateKey(shiftDays(keyToDate(week), -1));
+      const stillToCome = reconciled.days
+        .filter((d) => d.date >= todayKey && d.status !== "done" && d.sessionId)
+        .map((d) => ({ date: d.date, s: reconciled.sessions.find((x) => x.id === d.sessionId) }));
+      const plannedEve = stillToCome.find((x) => x.date === eve && isLongSession(x.s) && (x.s?.miles ?? 0) >= RECOVERY_AFTER_MILES);
       const futureChecked = validateWeek({
         days: futureReconciled.days.map((d) => ({ ...d, status: "upcoming" as const })),
         sessions: futureReconciled.sessions,
+        longBefore: [...longLoggedOn(eve), ...(plannedEve ? [{ date: eve, miles: plannedEve.s!.miles! }] : [])],
+        lastTrained: lastTrainedFrom([
+          ...loggedLifts,
+          ...stillToCome
+            .filter((x) => x.s && (x.s.kind === "lift" || x.s.kind === "lift_and_run"))
+            .map((x) => ({ date: x.date, names: x.s!.exercises.map((e) => e.name) })),
+        ]),
         // Every day of a future week may still move.
         today: localDateKey(shiftDays(keyToDate(week), -1)),
         outsideHard: currentHard,
