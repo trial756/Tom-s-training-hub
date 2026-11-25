@@ -11,6 +11,19 @@ import type { PlanExercise } from "@/lib/planner/types";
 // and any the model left blank. Setup, then the movement, then one point.
 
 const CUES: Record<string, string> = {
+  "Incline Barbell Bench Press": "Bench at 30–45°, grip just outside the shoulders, shoulder blades pinched. Lower to the upper chest, press up and slightly back.",
+  "Barbell Bench Press": "Eyes under the bar, shoulder blades back and down, feet planted. Lower to mid-chest, press up in a slight arc.",
+  "Machine Incline Press": "Seat so the handles start at upper-chest height, back flat on the pad. Press out without locking hard, lower slowly.",
+  "EZ-Bar Skull Crusher": "Lie on a bench, bar above the forehead, upper arms still. Bend at the elbows to lower it toward the forehead, then straighten.",
+  "Bent Over Barbell Row": "Hinge to about 45°, flat back, bar hanging at arm's length. Row it to the lower ribs, squeeze, lower under control.",
+  "Pull-Up": "Hang with hands just outside the shoulders. Pull the chest toward the bar by driving the elbows down; lower all the way.",
+  "Single Arm Lat Pulldown": "One handle on a high cable, kneel or sit tall. Pull the elbow down to your side, then let the lat stretch on the way up.",
+  "Narrow Grip Horizontal Cable Pull": "Sit tall, feet braced, close-grip handle at arm's length. Row it to the belly, squeeze the shoulder blades, return slowly.",
+  "Barbell Curl": "Stand tall, shoulder-width grip, elbows pinned at your sides. Curl without swinging; lower over two seconds.",
+  "Bayesian Curl": "Face away from a low cable, handle in one hand, arm slightly behind you. Curl forward and up; let it stretch back fully.",
+  "Barbell Shoulder Press": "Bar at the collarbone, grip just outside the shoulders, glutes tight. Press straight overhead, head through at the top.",
+  "Dumbbell Lateral Raise": "Dumbbells at your sides, slight bend in the elbows. Raise out to shoulder height leading with the elbows; lower slowly.",
+  "Barbell Shrug": "Hold the bar at arm's length, shoulder-width grip. Shrug straight up toward the ears, pause, lower — don't roll.",
   "Cable Fly": "Cables at chest height, step forward, slight bend in the elbows. Hug the handles together in an arc and squeeze the chest; let them open slowly.",
   "Pec Dec Fly": "Seat so the handles sit at chest height, back flat on the pad. Bring the handles together without bending the elbows more, then open slowly.",
   "Rear Delt Fly": "Face the pec dec pad, handles reversed, arms straight out front. Sweep the arms back to a T with the back of the shoulders; don't shrug.",

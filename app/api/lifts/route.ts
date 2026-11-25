@@ -16,7 +16,14 @@ export async function GET() {
   if (workouts.error) return NextResponse.json({ error: workouts.error.message }, { status: 500 });
   const bodyweight = weight.data?.weight_lb != null ? Number(weight.data.weight_lb) : BODYWEIGHT_LB;
 
-  const lifts = Array.from(liftTrends(workouts.data ?? []).values())
+  const trends = liftTrends(workouts.data ?? []);
+  // The last top set of every lift with history, for the Log page's templates.
+  const recent = Object.fromEntries(
+    Array.from(trends.values())
+      .filter((t) => t.last)
+      .map((t) => [t.key, { name: t.name, date: t.last!.date, weight: t.last!.topWeight, reps: t.last!.repsAtTop }])
+  );
+  const lifts = Array.from(trends.values())
     .filter((t) => t.sessions.length >= 2 && t.pattern !== "mobility" && t.pattern !== "core")
     .sort((a, b) => (b.last?.date ?? "").localeCompare(a.last?.date ?? ""))
     .map((t) => ({
@@ -28,5 +35,5 @@ export async function GET() {
       last: t.last && { set: t.last.bestSet, e1rm: t.last.e1rm, date: t.last.date },
       points: t.sessions.map((s) => ({ date: s.date, e1rm: s.e1rm })),
     }));
-  return NextResponse.json({ bodyweight, lifts });
+  return NextResponse.json({ bodyweight, lifts, recent });
 }
