@@ -110,9 +110,10 @@ Refresh signals (`lib/refresh.ts`) gained a `weight` kind for weigh-ins.
 - **Finish & log** posts the ticked sets to `POST /api/workouts` with `exercises` (stored exactly, standard lift names) and `duration_minutes` (elapsed), plus the matching text for the parser, so coaching and "vs last time" work as for a typed log; a failed save keeps the workout on the phone. Discard uses the undo toast.
 
 ### Log (workout entry)
-- Quick Log chips: Chest Day, Back Day, Leg Day, Shoulders, Arms, Core, Yoga, Rest Day (prefill text, don't auto-submit)
+- **Set by set** (Tom, Nov 2026: "the manual log could look more like the other log"), `components/SetLogger.tsx`: exercises with weight × reps rows (seconds for holds), + Set / − Set, ✕ to remove, add an exercise by name; changing a number carries to later sets that had the old one. Every filled-in set is logged (no ticking); minutes and notes optional. Posts `exercises` exactly (like workout mode) plus matching text for coaching.
+- **Day chips** — Chest Day, Back Day, Leg Day, Shoulders, Arms, Core, Mobility — fill the logger with a standard workout (`lib/workoutTemplates.ts`): each slot lists movements that do the same job and takes the one he logged most recently, prefilled from its last top set (`/api/lifts` returns `recent`, the last top set of every lift by exercise key). A starting point, not a prescription; everything is editable.
+- "Or describe it in words instead" keeps the free-text box, AI-parsed on submit (see AI Behaviors)
 - Date picker (defaults today, can backdate)
-- Free-text box, AI-parsed on submit (see AI Behaviors)
 - Recent list (last 4 workouts+runs combined)
 
 ### Runs

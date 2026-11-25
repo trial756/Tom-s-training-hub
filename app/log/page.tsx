@@ -8,17 +8,8 @@ import Spinner from "@/components/Spinner";
 import type { Run, Workout } from "@/lib/types";
 import { formatDuration, formatLoggedAt, formatPace, localDateKey, loggedAtFor, summarizeExerciseNames } from "@/lib/format";
 import { notifyDataChanged } from "@/lib/refresh";
-
-const QUICK_LOG_CHIPS: { label: string; prefill: string }[] = [
-  { label: "Chest Day", prefill: "Chest day: " },
-  { label: "Back Day", prefill: "Back day: " },
-  { label: "Leg Day", prefill: "Leg day: " },
-  { label: "Shoulders", prefill: "Shoulders: " },
-  { label: "Arms", prefill: "Arms: " },
-  { label: "Core", prefill: "Core: " },
-  { label: "Yoga", prefill: "Yoga: " },
-  { label: "Rest Day", prefill: "Rest day — no workout today." },
-];
+import SetLogger from "@/components/SetLogger";
+import { TEMPLATES, buildTemplate, draftText, draftToExercises, type DraftExercise, type RecentSets } from "@/lib/workoutTemplates";
 
 function todayISO(): string {
   return localDateKey(new Date());
@@ -29,6 +20,14 @@ type RecentEntry = { kind: "workout"; item: Workout } | { kind: "run"; item: Run
 export default function LogPage() {
   const [date, setDate] = useState(todayISO());
   const [text, setText] = useState("");
+  // Set by set (Tom, Nov 2026: "the manual log could look more like the other log"),
+  // with a template per day type; describing it in words stays as the fallback.
+  const [mode, setMode] = useState<"sets" | "words">("sets");
+  const [draft, setDraft] = useState<DraftExercise[]>([]);
+  const [title, setTitle] = useState("Workout");
+  const [minutes, setMinutes] = useState("");
+  const [notes, setNotes] = useState("");
+  const [recentSets, setRecentSets] = useState<RecentSets>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Workout | null>(null);
@@ -80,41 +79,62 @@ export default function LogPage() {
     }
   }
 
-  function applyQuickLog(prefill: string) {
-    setText(prefill);
-    requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(el.value.length, el.value.length);
-    });
+  // Last top set of every lift, so a template opens with real numbers.
+  useEffect(() => {
+    fetch("/api/lifts", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j?.recent && setRecentSets(j.recent))
+      .catch(() => {});
+  }, []);
+
+  function applyTemplate(label: string) {
+    const t = TEMPLATES.find((x) => x.label === label);
+    if (!t) return;
+    setMode("sets");
+    setTitle(t.title);
+    setDraft(buildTemplate(t, recentSets));
   }
+
+  const ready = mode === "sets" ? draftToExercises(draft).length > 0 : !!text.trim();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!ready) return;
     setSubmitting(true);
     setError(null);
     setFavoriteSaved(false);
     setSavedOffline(null);
+    const mins = Number(minutes);
+    const body =
+      mode === "sets"
+        ? {
+            text: draftText(title, draft, notes),
+            exercises: draftToExercises(draft),
+            ...(mins > 0 && mins < 600 ? { duration_minutes: mins } : {}),
+            logged_at: loggedAtFor(date),
+          }
+        : { text, logged_at: loggedAtFor(date) };
+    const label = mode === "sets" ? title : text.trim().split("\n")[0].slice(0, 40);
+    const reset = () => {
+      setText("");
+      setDraft([]);
+      setTitle("Workout");
+      setMinutes("");
+      setNotes("");
+      setDate(todayISO());
+    };
     try {
-      const result = await postOrQueue<{ workout: Workout }>(
-        "/api/workouts",
-        { text, logged_at: loggedAtFor(date) },
-        { kind: "workout", label: `Workout · ${text.trim().split("\n")[0].slice(0, 40)}` }
-      );
+      const result = await postOrQueue<{ workout: Workout }>("/api/workouts", body, { kind: "workout", label: `Workout · ${label}` });
       if (result.queued) {
         setLastSaved(null);
         setSavedOffline("Saved on this phone. It\u2019ll sync, with coaching, when you\u2019re back online.");
-        setText("");
-        setDate(todayISO());
+        reset();
         return;
       }
       if (!result.ok) throw new Error(result.error);
       setLastSaved(result.data.workout);
       notifyDataChanged("workout");
-      setText("");
-      setDate(todayISO());
+      reset();
       loadRecent();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -152,18 +172,20 @@ export default function LogPage() {
 
   return (
     <div>
-      <PageHeader title="Log a Workout" subtitle="Describe it in plain English — AI handles the rest." />
+      <PageHeader title="Log a Workout" subtitle="Pick a day to start from your usual lifts, or add exercises one by one." />
 
       <div className="mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
-        {QUICK_LOG_CHIPS.map((chip) => (
+        {TEMPLATES.map((t) => (
           <button
-            key={chip.label}
+            key={t.label}
             type="button"
-            onClick={() => applyQuickLog(chip.prefill)}
+            onClick={() => applyTemplate(t.label)}
             disabled={submitting}
-            className="whitespace-nowrap rounded-full border border-base-600 bg-base-800 px-3.5 py-1.5 text-sm font-medium text-gray-300 transition-colors active:border-accent active:text-accent"
+            className={`min-h-[40px] whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              mode === "sets" && title === t.title ? "border-accent text-accent" : "border-base-600 bg-base-800 text-gray-300"
+            }`}
           >
-            {chip.label}
+            {t.label}
           </button>
         ))}
       </div>
@@ -178,16 +200,55 @@ export default function LogPage() {
           disabled={submitting}
         />
 
-        <textarea
-          ref={textareaRef}
-          className="input-field min-h-[120px] resize-none"
-          placeholder="e.g. Bench press 3x8 at 135, squats 4x5 at 185, then 3 sets of pull-ups to failure. Felt strong today, ~45 min total."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
+        {mode === "sets" ? (
+          <>
+            {draft.length > 0 && (
+              <p className="mb-2 text-xs text-muted">
+                Weights and reps are from the last time you did each lift — change anything, add or remove sets.
+                Only filled-in sets are logged.
+              </p>
+            )}
+            <SetLogger draft={draft} onChange={setDraft} recent={recentSets} disabled={submitting} />
+            <div className="mt-3 flex gap-2">
+              <input
+                aria-label="Minutes"
+                className="input-field min-h-[44px] w-28 text-center"
+                inputMode="numeric"
+                placeholder="min"
+                value={minutes}
+                disabled={submitting}
+                onChange={(e) => setMinutes(e.target.value.replace(/\D/g, ""))}
+              />
+              <input
+                aria-label="Notes"
+                className="input-field min-h-[44px] flex-1"
+                placeholder="Notes (optional)"
+                value={notes}
+                disabled={submitting}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
+          </>
+        ) : (
+          <textarea
+            ref={textareaRef}
+            className="input-field min-h-[120px] resize-none"
+            placeholder="e.g. Bench press 3x8 at 135, squats 4x5 at 185, then 3 sets of pull-ups to failure. Felt strong today, ~45 min total."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={submitting}
+          />
+        )}
+        <button type="submit" className="btn-primary mt-3 w-full" disabled={submitting || !ready}>
+          {submitting ? (mode === "sets" ? "Logging…" : "Parsing with AI…") : "Log Workout"}
+        </button>
+        <button
+          type="button"
+          className="mt-1 min-h-[44px] w-full text-sm text-faint"
           disabled={submitting}
-        />
-        <button type="submit" className="btn-primary mt-3 w-full" disabled={submitting || !text.trim()}>
-          {submitting ? "Parsing with AI…" : "Log Workout"}
+          onClick={() => setMode((m) => (m === "sets" ? "words" : "sets"))}
+        >
+          {mode === "sets" ? "Or describe it in words instead" : "← Log set by set instead"}
         </button>
         {error && <p className="mt-2 text-sm text-danger">{error}</p>}
         {savedOffline && <p className="mt-2 text-sm text-fuel">{savedOffline}</p>}
